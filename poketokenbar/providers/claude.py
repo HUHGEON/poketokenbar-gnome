@@ -13,6 +13,7 @@ from datetime import date as _date
 from datetime import datetime
 from pathlib import Path
 
+from .. import pricing
 from ..cache import ScanCache
 from ..models import DailyUsage, Entry, ProviderEnrichment
 
@@ -189,6 +190,10 @@ class ClaudeProvider:
             daily.output_tokens += e.output
             daily.cache_creation_tokens += e.cache_write
             daily.cache_read_tokens += e.cache_read
+            # Priced per entry, because a day mixes models with different rates.
+            daily.total_cost += pricing.cost(
+                e.model, e.input, e.output, e.cache_write, e.cache_read
+            )
         daily.total_tokens = (
             daily.input_tokens
             + daily.output_tokens
