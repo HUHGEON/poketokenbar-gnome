@@ -33,6 +33,10 @@ class Daemon:
         self.companion_store = companion_store
         self.notifier = notifier
         self.burn = burn_tracker
+        # Which account the last limits belonged to. Switching accounts changes
+        # what the percentages mean, so cached limits and burn history from the
+        # previous account must not carry over.
+        self._account_uuid: str | None = None
         self.status_checker = status_checker
         self.spool: Path | None = None
         self.config_values = config.load(config_path)
@@ -106,6 +110,16 @@ class Daemon:
             # Best effort: limits failing hides that section but must never
             # affect the token counts, which come from local logs.
             limit_status = self.limits_source.get()
+            if limit_status is not None and limit_status.account:
+                uuid = limit_status.account.get("uuid") or ""
+                if self._account_uuid is not None and uuid != self._account_uuid:
+                    # A different account's utilization is a different scale;
+                    # a slope fitted across the switch would be meaningless.
+                    if self.burn is not None:
+                        self.burn = type(self.burn)()
+                    self.limits_source.invalidate()
+                    limit_status = self.limits_source.get()
+                self._account_uuid = uuid
             if self.limits_source.last_error:
                 errors.append(f"limits: {self.limits_source.last_error}")
 

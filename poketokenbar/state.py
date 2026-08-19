@@ -42,6 +42,7 @@ def _limits_payload(status) -> dict:
         "session": window(status.session),
         "weekly": window(status.weekly),
         "plan": status.subscription_type,
+        "account": status.account or {},
     }
 
 

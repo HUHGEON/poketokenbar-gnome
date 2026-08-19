@@ -64,10 +64,39 @@ class LimitStatus:
     weekly: LimitWindow | None = None
     subscription_type: str | None = None
     rate_limit_tier: str | None = None
+    account: dict | None = None
 
 
 def default_credentials_path() -> Path:
     return Path.home() / ".claude" / ".credentials.json"
+
+
+def default_account_path() -> Path:
+    return Path.home() / ".claude.json"
+
+
+def read_account(path: Path | None = None) -> dict:
+    """Who the limits belong to.
+
+    Session logs carry no account marker, so token totals from several accounts
+    on one machine are indistinguishable and get summed. Limits, by contrast,
+    come from whichever account is currently logged in. Surfacing the account
+    keeps that difference visible instead of silently misleading.
+    """
+    path = path or default_account_path()
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    account = raw.get("oauthAccount")
+    if not isinstance(account, dict):
+        return {}
+    return {
+        "uuid": account.get("accountUuid") or "",
+        "email": account.get("emailAddress") or "",
+        "display_name": account.get("displayName") or account.get("fullName") or "",
+        "organization": account.get("organizationName") or "",
+    }
 
 
 def read_credentials(path: Path | None = None) -> Credential:
@@ -228,4 +257,5 @@ def fetch_status(path: Path | None = None) -> LimitStatus:
     # Plan info comes from the credentials file, not the usage response.
     status.subscription_type = credential.subscription_type
     status.rate_limit_tier = credential.rate_limit_tier
+    status.account = read_account()
     return status

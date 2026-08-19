@@ -447,6 +447,25 @@ PlasmaExtras.Representation {
                               : i18n("Limits (official)")
                     }
 
+                    // Token totals sum every account used on this machine;
+                    // limits belong to whichever is logged in. Naming it keeps
+                    // that difference visible.
+                    PlasmaComponents.Label {
+                        visible: text.length > 0
+                        opacity: 0.7
+                        text: {
+                            if (!full.limits || !full.limits.account)
+                                return "";
+                            var a = full.limits.account;
+                            var who = a.email ? a.email : a.display_name;
+                            if (!who)
+                                return "";
+                            return a.organization
+                                   ? i18n("for %1 · %2", who, a.organization)
+                                   : i18n("for %1", who);
+                        }
+                    }
+
                     Repeater {
                         model: {
                             if (!full.limits)

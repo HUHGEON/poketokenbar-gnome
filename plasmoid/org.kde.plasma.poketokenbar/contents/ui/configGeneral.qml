@@ -2,9 +2,12 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import org.kde.kcmutils as KCM
 import org.kde.plasma.plasma5support as Plasma5Support
 
-Kirigami.FormLayout {
+// SimpleKCM, not a bare FormLayout: Plasma's config dialog does not scroll a
+// plain layout, so everything past the fold (pet size, backup) was unreachable.
+KCM.SimpleKCM {
     id: page
 
     // Plasma injects a cfg_<key>Default for every cfg_<key> alias, plus a
@@ -85,6 +88,8 @@ Kirigami.FormLayout {
         if (s.language !== undefined)
             language.currentIndex = language.keys.indexOf(s.language);
     }
+
+    Kirigami.FormLayout {
 
     // ---------------- General ----------------
 
@@ -239,6 +244,8 @@ Kirigami.FormLayout {
         text: i18n("Exports to ~/poketokenbar-save.json — Pokédex, tokens, bag, and companion")
         opacity: 0.7
         wrapMode: Text.Wrap
+    }
+
     }
 
     function push_export() {
