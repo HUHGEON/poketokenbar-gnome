@@ -28,5 +28,12 @@ MouseArea {
             opacity: 0.8
             font.pixelSize: Math.round(compact.height * 0.45)
         }
+
+        PlasmaComponents.Label {
+            text: compact.panel ? compact.panel.limit_text : ""
+            visible: text.length > 0
+            opacity: 0.9
+            font.pixelSize: Math.round(compact.height * 0.45)
+        }
     }
 }
