@@ -1,0 +1,71 @@
+# Maintainer: Ruben Sanchez Rivero <sanchezriveroruben@gmail.com>
+#
+# Unofficial Linux/KDE port of PokeTokenBar (https://github.com/chattymin/PokeTokenBar).
+# Installs system-wide; the daemon still runs per-user via a systemd user unit.
+
+pkgname=poketokenbar-plasma
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="AI coding token usage with a Pokemon companion, for the KDE Plasma panel"
+arch=('any')
+url="https://github.com/rubensanchezrivero/PokeTokenBar"
+license=('MIT')
+depends=('python' 'plasma-workspace' 'qt6-declarative')
+optdepends=(
+  'python-orjson: ~2x faster log parsing'
+  'libnotify: desktop notifications'
+)
+makedepends=('git')
+source=("git+https://github.com/rubensanchezrivero/PokeTokenBar.git#branch=main")
+sha256sums=('SKIP')
+
+package() {
+  cd "$srcdir/PokeTokenBar/linux"
+
+  # Python package
+  local site="$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+  install -d "$pkgdir$site/poketokenbar"
+  cp -r poketokenbar/. "$pkgdir$site/poketokenbar/"
+  find "$pkgdir$site/poketokenbar" -name '__pycache__' -type d -exec rm -rf {} +
+
+  # Control CLI
+  install -d "$pkgdir/usr/bin"
+  cat > "$pkgdir/usr/bin/poketokenctl" <<'EOF'
+#!/usr/bin/env bash
+exec python -m poketokenbar.ctl "$@"
+EOF
+  chmod 755 "$pkgdir/usr/bin/poketokenctl"
+
+  cat > "$pkgdir/usr/bin/poketokend" <<'EOF'
+#!/usr/bin/env bash
+exec python -m poketokenbar.daemon "$@"
+EOF
+  chmod 755 "$pkgdir/usr/bin/poketokend"
+
+  # Plasma widgets
+  for pkg in org.kde.plasma.poketokenbar org.kde.plasma.poketokenpet; do
+    install -d "$pkgdir/usr/share/plasma/plasmoids/$pkg"
+    cp -r "plasmoid/$pkg/." "$pkgdir/usr/share/plasma/plasmoids/$pkg/"
+  done
+
+  # systemd user unit — packaged variant runs the installed entry point rather
+  # than a per-user venv.
+  install -d "$pkgdir/usr/lib/systemd/user"
+  cat > "$pkgdir/usr/lib/systemd/user/poketokend.service" <<'EOF'
+[Unit]
+Description=PokeTokenBar usage daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/poketokend
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+
+  install -Dm644 ../LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

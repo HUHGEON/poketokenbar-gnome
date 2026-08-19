@@ -8,6 +8,11 @@ This directory adds a Python daemon and two KDE Plasma 6 widgets that reproduce
 that experience on Linux. **Everything in the original macOS app is untouched** —
 no file under `Sources/`, `Tests/`, `Package.swift`, or `scripts/` was modified.
 
+<div align="center">
+<img src="assets/panel.png" alt="The panel widget: companion sprite beside the 5-hour and weekly limit percentages" width="380">
+<br><em>Your companion beside the 5-hour and weekly limits, coloured by how close you are.</em>
+</div>
+
 ---
 
 ## Credits
@@ -90,13 +95,45 @@ Compared to the macOS app:
 
 ## Install
 
+### Arch / CachyOS / EndeavourOS (recommended)
+
+```bash
+git clone https://github.com/rubensanchezrivero/PokeTokenBar.git
+cd PokeTokenBar/linux/packaging
+makepkg -si
+systemctl --user enable --now poketokend
+```
+
+Installs system-wide, with no venv and no copies under `$HOME`. Uninstall with
+`sudo pacman -R poketokenbar-plasma`.
+
+### Any other distro
+
 ```bash
 git clone https://github.com/rubensanchezrivero/PokeTokenBar.git
 cd PokeTokenBar
 ./linux/install.sh
 ```
 
-Everything lands under `$HOME`:
+Self-contained: creates its own venv and installs everything under `$HOME`,
+touching nothing system-wide.
+
+### Widgets only
+
+If you'd rather run the daemon yourself, build installable bundles:
+
+```bash
+./linux/packaging/build-plasmoids.sh
+kpackagetool6 -t Plasma/Applet -i linux/dist/org.kde.plasma.poketokenbar.plasmoid
+kpackagetool6 -t Plasma/Applet -i linux/dist/org.kde.plasma.poketokenpet.plasmoid
+```
+
+The widgets only render whatever the daemon writes to `state.json`, so the
+daemon still has to be running.
+
+---
+
+With `install.sh`, everything lands under `$HOME`:
 
 | Path | Contents |
 |---|---|
