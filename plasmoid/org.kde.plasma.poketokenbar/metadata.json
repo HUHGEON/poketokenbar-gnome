@@ -1,0 +1,15 @@
+{
+  "KPlugin": {
+    "Id": "org.kde.plasma.poketokenbar",
+    "Name": "PokeTokenBar",
+    "Description": "AI coding token usage, with a Pokemon companion",
+    "Icon": "utilities-system-monitor",
+    "Version": "0.1.0",
+    "License": "MIT",
+    "Authors": [{ "Name": "Ruben Sanchez Rivero" }],
+    "Category": "System Information",
+    "ServiceTypes": ["Plasma/Applet"]
+  },
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "KPackageStructure": "Plasma/Applet"
+}

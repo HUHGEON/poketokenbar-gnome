@@ -1,0 +1,14 @@
+[Unit]
+Description=PokeTokenBar usage daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/poketokenbar/venv/bin/python -m poketokenbar.daemon
+WorkingDirectory=%h/.local/share/poketokenbar/app
+Environment=PYTHONPATH=%h/.local/share/poketokenbar/app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
