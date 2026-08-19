@@ -6,17 +6,22 @@ import os
 import time
 from pathlib import Path
 
-from . import commands, config, limits, state
+from . import commands, config, state
+from .limits_source import LimitsSource
 from .cache import ScanCache
 from .models import DailyUsage
 
 
 class Daemon:
-    def __init__(self, state_path: Path, config_path: Path, cache, providers) -> None:
+    def __init__(
+        self, state_path: Path, config_path: Path, cache, providers, limits_source=None
+    ) -> None:
         self.state_path = state_path
         self.config_path = config_path
         self.cache = cache
         self.providers = providers
+        # Injected so tests never reach the network. None disables limits.
+        self.limits_source = limits_source
         self.spool: Path | None = None
         self.config_values = config.load(config_path)
 
@@ -37,12 +42,12 @@ class Daemon:
                 daily_by_provider[provider.id] = daily
 
         limit_status = None
-        try:
-            limit_status = limits.fetch_status()
-        except limits.LimitsError as exc:
+        if self.limits_source is not None:
             # Best effort: limits failing hides that section but must never
             # affect the token counts, which come from local logs.
-            errors.append(f"limits: {exc}")
+            limit_status = self.limits_source.get()
+            if self.limits_source.last_error:
+                errors.append(f"limits: {self.limits_source.last_error}")
 
         payload = state.build(
             daily_by_provider, self.config_values, errors, limit_status=limit_status
@@ -78,6 +83,7 @@ def main() -> int:
         config_path=config.default_path(),
         cache=cache,
         providers=[ClaudeProvider(cache=cache)],
+        limits_source=LimitsSource(),
     )
     try:
         daemon.run()
