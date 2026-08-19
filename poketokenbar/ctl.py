@@ -10,7 +10,8 @@ from . import commands, config
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv:
-        print("usage: poketokenctl {set <key> <value>|refresh|buy <key>|use <key>}",
+        print("usage: poketokenctl {set <key> <value>|refresh|buy <key>|use <key>|"
+              "export <path>|import <path>}",
               file=sys.stderr)
         return 2
 
@@ -29,6 +30,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if action == "refresh":
         commands.enqueue("refresh", {})
+        return 0
+
+    if action in ("export", "import"):
+        if len(rest) != 1:
+            print(f"usage: poketokenctl {action} <path>", file=sys.stderr)
+            return 2
+        from pathlib import Path
+
+        commands.enqueue(action, {"path": str(Path(rest[0]).expanduser().resolve())})
         return 0
 
     if action in ("buy", "use"):

@@ -58,6 +58,8 @@ def build(
     catch_log: list | None = None,
     rarity_counts: dict | None = None,
     periods: dict | None = None,
+    burn: dict | None = None,
+    provider_status: dict | None = None,
 ) -> dict:
     total_tokens = sum(d.total_tokens for d in daily_by_provider.values())
     total_cost = sum(d.total_cost for d in daily_by_provider.values())
@@ -98,6 +100,8 @@ def build(
         "catch_log": catch_log or [],
         "rarity_counts": rarity_counts or {},
         "periods": periods or {},
+        "burn": burn or {},
+        "provider_status": provider_status or {},
         "panel": {
             "tokens_text": fmt.compact(total_tokens)
             if config_values.get("show_tokens_in_menu")

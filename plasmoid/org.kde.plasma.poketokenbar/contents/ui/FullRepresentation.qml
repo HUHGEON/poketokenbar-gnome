@@ -22,6 +22,14 @@ PlasmaExtras.Representation {
     readonly property var catchLog: root.appState && root.appState.catch_log ? root.appState.catch_log : []
     readonly property var rarityCounts: root.appState && root.appState.rarity_counts
                                         ? root.appState.rarity_counts : ({})
+    readonly property var burn: root.appState && root.appState.burn ? root.appState.burn : ({})
+    readonly property var providerStatus: root.appState && root.appState.provider_status
+                                          ? root.appState.provider_status : ({})
+    // The daemon writes updated_at every poll. If it stops, the numbers freeze
+    // while still looking authoritative — so say so rather than lying quietly.
+    readonly property bool stale: root.appState && root.appState.updated_at
+                                  ? (Date.now() / 1000 - root.appState.updated_at) > 600
+                                  : false
 
     property string rarityFilter: ""
     property int dexPage: 0
@@ -398,9 +406,11 @@ PlasmaExtras.Representation {
                                 return [];
                             var out = [];
                             if (full.limits.session)
-                                out.push({ "label": i18n("5-hour session"), "w": full.limits.session });
+                                out.push({ "label": i18n("5-hour session"),
+                                           "kind": "session", "w": full.limits.session });
                             if (full.limits.weekly)
-                                out.push({ "label": i18n("Weekly"), "w": full.limits.weekly });
+                                out.push({ "label": i18n("Weekly"),
+                                           "kind": "weekly", "w": full.limits.weekly });
                             return out;
                         }
 
@@ -426,9 +436,51 @@ PlasmaExtras.Representation {
                                 value: modelData.w.utilization
                             }
 
+                            RowLayout {
+                                Layout.fillWidth: true
+
+                                PlasmaComponents.Label {
+                                    text: full.resetIn(modelData.w.resets_at)
+                                    opacity: 0.7
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                PlasmaComponents.Label {
+                                    visible: text.length > 0
+                                    opacity: 0.9
+                                    color: Kirigami.Theme.neutralTextColor
+                                    text: {
+                                        var b = full.burn[modelData.kind];
+                                        if (!b || !b.eta_text)
+                                            return "";
+                                        return i18n("at this rate, full at %1", b.eta_text);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // --- provider incidents ---
+                    Repeater {
+                        model: Object.keys(full.providerStatus)
+
+                        RowLayout {
+                            Layout.fillWidth: true
+
                             PlasmaComponents.Label {
-                                text: full.resetIn(modelData.w.resets_at)
-                                opacity: 0.7
+                                text: modelData
+                                opacity: 0.8
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            PlasmaComponents.Label {
+                                text: full.providerStatus[modelData].label
+                                color: full.providerStatus[modelData].severity === "crit"
+                                       ? Kirigami.Theme.negativeTextColor
+                                       : Kirigami.Theme.neutralTextColor
+                                font.bold: true
                             }
                         }
                     }
@@ -856,6 +908,12 @@ PlasmaExtras.Representation {
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
+
+            PlasmaComponents.Label {
+                visible: full.stale
+                text: i18n("⚠ Data is stale — is poketokend running?")
+                color: Kirigami.Theme.neutralTextColor
+            }
 
             QQC2.ToolButton {
                 icon.name: "view-refresh"

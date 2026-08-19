@@ -8,7 +8,9 @@ from pathlib import Path
 
 from . import commands, config, state
 from .companion_store import CompanionStore
+from .burn import BurnTracker
 from .notify import Notifier
+from .status import StatusChecker
 from .limits_source import LimitsSource
 from .pokeapi import PokeAPI
 from .sprites import SpriteStore
@@ -20,6 +22,7 @@ class Daemon:
     def __init__(
         self, state_path: Path, config_path: Path, cache, providers,
         limits_source=None, companion_store=None, notifier=None,
+        burn_tracker=None, status_checker=None,
     ) -> None:
         self.state_path = state_path
         self.config_path = config_path
@@ -29,6 +32,8 @@ class Daemon:
         self.limits_source = limits_source
         self.companion_store = companion_store
         self.notifier = notifier
+        self.burn = burn_tracker
+        self.status_checker = status_checker
         self.spool: Path | None = None
         self.config_values = config.load(config_path)
 
@@ -42,6 +47,23 @@ class Daemon:
                     self.limits_source.invalidate()
             elif name == "reload_config":
                 self.config_values = config.load(self.config_path)
+            elif name in ("export", "import") and self.companion_store is not None:
+                target = (command.get("args") or {}).get("path", "")
+                try:
+                    from . import transfer
+
+                    if name == "export":
+                        written = transfer.export_to(
+                            Path(target), self.companion_store.state
+                        )
+                        message = f"exported to {written}"
+                    else:
+                        self.companion_store.state = transfer.import_from(Path(target))
+                        message = "save imported"
+                    if self.notifier is not None:
+                        self.notifier._send("PokeTokenBar", message)
+                except Exception as exc:
+                    errors.append(f"{name}: {exc}")
             elif name in ("buy", "use") and self.companion_store is not None:
                 key = (command.get("args") or {}).get("key", "")
                 try:
@@ -108,6 +130,9 @@ class Daemon:
                         windows["session"] = limit_status.session.utilization
                     if limit_status.weekly is not None:
                         windows["weekly"] = limit_status.weekly.utilization
+                    if self.burn is not None:
+                        for kind, utilization in windows.items():
+                            self.burn.record(kind, utilization)
                     self.companion_store.grant_candy(windows)
                     if self.notifier is not None and self.config_values.get(
                         "limit_notifications", True
@@ -129,6 +154,15 @@ class Daemon:
                 # The companion is cosmetic; never let it break the numbers.
                 errors.append(f"companion: {exc}")
 
+        status_payload = None
+        if self.status_checker is not None and self.config_values.get(
+            "status_checks_enabled", True
+        ):
+            try:
+                status_payload = self.status_checker.get()
+            except Exception as exc:
+                errors.append(f"status: {exc}")
+
         payload = state.build(
             daily_by_provider,
             self.config_values,
@@ -141,6 +175,8 @@ class Daemon:
             catch_log=self.companion_store.catch_log_payload() if self.companion_store else None,
             rarity_counts=self.companion_store.rarity_counts() if self.companion_store else None,
             periods=periods,
+            burn=self.burn.payload() if self.burn is not None else None,
+            provider_status=status_payload,
         )
         state.write(self.state_path, payload)
         return payload
@@ -179,6 +215,8 @@ def main() -> int:
             api=PokeAPI(), sprite_store=SpriteStore()
         ),
         notifier=Notifier(),
+        burn_tracker=BurnTracker(),
+        status_checker=StatusChecker(),
     )
     try:
         daemon.run()

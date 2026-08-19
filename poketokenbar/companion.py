@@ -50,6 +50,8 @@ class MonState:
         Falls back to base_id when path_ids is empty so a damaged save cannot
         crash rendering, which happens on every frame.
         """
+        if self.ditto_revealed:
+            return balance.DITTO_SPECIES_ID
         if not self.path_ids:
             return self.base_id
         return self.path_ids[min(self.stage_index, len(self.path_ids) - 1)]
@@ -109,6 +111,7 @@ class GrowthEvents:
     hatched: int | None = None
     evolved_to: int | None = None
     graduated: DexEntry | None = None
+    ditto_revealed: bool = False
 
 
 def display_state(
@@ -160,6 +163,18 @@ def roll_nature(rng: random.Random) -> str:
     return rng.choice(balance.NATURES)
 
 
+def roll_ditto(rng: random.Random, line: EvoLine) -> bool:
+    """Whether this hatch is secretly a disguised Ditto.
+
+    Restricted to common lines with 2+ forms, matching the Swift rule: the joke
+    only lands when the disguise is something ordinary that visibly "evolves"
+    before the reveal.
+    """
+    if line.rarity != Rarity.COMMON or line.total_forms < 2:
+        return False
+    return rng.randrange(balance.DITTO_DISGUISE_DENOMINATOR) == 0
+
+
 def hatch(state: CompanionState, line: EvoLine, rng: random.Random) -> MonState:
     """Turn the egg into a companion. Shiny and nature are fixed here."""
     has_charm = state.inventory.get("shinyCharm", 0) > 0
@@ -174,6 +189,9 @@ def hatch(state: CompanionState, line: EvoLine, rng: random.Random) -> MonState:
         is_shiny=roll_shiny(rng, has_charm),
         nature=roll_nature(rng),
         hatched_at=__import__("time").time(),
+        # The disguise stores the species being impersonated; the reveal swaps
+        # the display to Ditto while keeping this for the "it was Ditto!" moment.
+        ditto_disguise=line.base_id if roll_ditto(rng, line) else None,
     )
     state.active = mon
     # The guarantee is consumed by the hatch it paid for.
@@ -252,5 +270,10 @@ def apply_usage(
             break
         mon.stage_index += 1
         events.evolved_to = mon.current_id
+        # A disguised Ditto reveals itself on its first evolution — the moment
+        # the "evolution" would have to actually happen.
+        if mon.ditto_disguise is not None and not mon.ditto_revealed:
+            mon.ditto_revealed = True
+            events.ditto_revealed = True
 
     return events
