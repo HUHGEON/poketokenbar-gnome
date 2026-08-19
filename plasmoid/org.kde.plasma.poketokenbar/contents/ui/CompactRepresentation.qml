@@ -8,6 +8,7 @@ MouseArea {
 
     readonly property var panel: root.appState ? root.appState.panel : null
     readonly property var windows: panel && panel.limit_windows ? panel.limit_windows : []
+    readonly property string spritePath: panel && panel.sprite_path ? panel.sprite_path : ""
 
     Layout.minimumWidth: row.implicitWidth
     Layout.preferredWidth: row.implicitWidth
@@ -25,6 +26,18 @@ MouseArea {
         id: row
         anchors.fill: parent
         spacing: Kirigami.Units.smallSpacing
+
+        // The companion. AnimatedImage plays the Gen-V GIF directly, which is
+        // why no frame decoding was ported from the macOS ImageIO path.
+        AnimatedImage {
+            source: compact.spritePath ? "file://" + compact.spritePath : ""
+            visible: compact.spritePath !== ""
+            playing: visible
+            fillMode: Image.PreserveAspectFit
+            smooth: false          // pixel art
+            Layout.preferredHeight: compact.height
+            Layout.preferredWidth: compact.height
+        }
 
         // Placeholder until the first state.json read lands.
         PlasmaComponents.Label {

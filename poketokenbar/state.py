@@ -51,6 +51,7 @@ def build(
     errors: list[str],
     scanning: bool = False,
     limit_status=None,
+    companion_payload: dict | None = None,
 ) -> dict:
     total_tokens = sum(d.total_tokens for d in daily_by_provider.values())
     total_cost = sum(d.total_cost for d in daily_by_provider.values())
@@ -79,6 +80,7 @@ def build(
             for pid, d in daily_by_provider.items()
         },
         "limits": _limits_payload(limit_status),
+        "companion": companion_payload or {},
         "panel": {
             "tokens_text": fmt.compact(total_tokens)
             if config_values.get("show_tokens_in_menu")
@@ -104,7 +106,7 @@ def build(
             ]
             if config_values.get("show_limit_in_menu")
             else [],
-            "sprite_path": "",  # populated in Plan 3
+            "sprite_path": (companion_payload or {}).get("sprite_path", ""),
         },
     }
 
