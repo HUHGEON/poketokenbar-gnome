@@ -6,7 +6,8 @@ from poketokenbar import config
 def test_load_returns_defaults_when_file_absent(tmp_path):
     values = config.load(tmp_path / "config.json")
     assert values["refresh_interval"] == 120
-    assert values["show_tokens_in_menu"] is True
+    assert values["show_tokens_in_menu"] is False
+    assert values["show_limit_in_menu"] is True
 
 
 def test_load_merges_partial_file_over_defaults(tmp_path):

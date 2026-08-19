@@ -154,6 +154,35 @@ def parse(payload: dict) -> LimitStatus:
     return status
 
 
+def level(utilization: float, warn: float = 80, crit: float = 95) -> str:
+    """Colour band for a utilization percentage.
+
+    A boundary value belongs to the more severe band: 80 with warn=80 is a
+    warning, not still-fine.
+    """
+    if utilization >= crit:
+        return "crit"
+    if utilization >= warn:
+        return "warn"
+    return "ok"
+
+
+def windows(status: LimitStatus | None, mode: str) -> list[LimitWindow]:
+    """The windows the panel should show, in display order."""
+    if status is None:
+        return []
+    out: list[LimitWindow] = []
+    if mode in ("session", "both") and status.session is not None:
+        out.append(status.session)
+    if mode in ("weekly", "both") and status.weekly is not None:
+        out.append(status.weekly)
+    return out
+
+
+def format_percent(value: float) -> str:
+    return f"{value:.0f}%" if value == round(value) else f"{value:.1f}%"
+
+
 def _format(window: LimitWindow | None, label: str) -> str:
     if window is None:
         return ""

@@ -22,7 +22,8 @@ def test_build_totals_across_providers():
 
 
 def test_build_includes_panel_text():
-    payload = state.build({"claude_code": _daily()}, config.DEFAULTS, [])
+    values = dict(config.DEFAULTS, show_tokens_in_menu=True)
+    payload = state.build({"claude_code": _daily()}, values, [])
     assert payload["panel"]["tokens_text"] == "40.9K"
 
 

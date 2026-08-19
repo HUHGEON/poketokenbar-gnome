@@ -89,6 +89,21 @@ def build(
             "limit_text": limits.panel_text(limit_status, limit_mode)
             if config_values.get("show_limit_in_menu")
             else "",
+            # Structured form so the panel can colour each number on its own.
+            "limit_windows": [
+                {
+                    "value": w.utilization,
+                    "text": limits.format_percent(w.utilization),
+                    "level": limits.level(
+                        w.utilization,
+                        config_values.get("warn_threshold", 80),
+                        config_values.get("crit_threshold", 95),
+                    ),
+                }
+                for w in limits.windows(limit_status, limit_mode)
+            ]
+            if config_values.get("show_limit_in_menu")
+            else [],
             "sprite_path": "",  # populated in Plan 3
         },
     }
