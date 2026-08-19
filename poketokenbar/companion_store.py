@@ -41,6 +41,9 @@ class CompanionStore:
         self.api = api
         self.sprites = sprite_store
         self.rng = rng or random.Random()
+        # Held for one poll so the popup can show a celebration banner; the
+        # notification fires immediately but the banner needs a render pass.
+        self.celebration: dict | None = None
         self.last_events: companion.GrowthEvents | None = None
 
     # --- usage -------------------------------------------------------------
@@ -86,7 +89,43 @@ class CompanionStore:
         self.last_events = companion.apply_usage(
             self.state, delta, line_for_egg=line, rng=self.rng
         )
+        self._note_celebration(self.last_events)
         self._persist()
+
+    def _note_celebration(self, events) -> None:
+        if events is None:
+            return
+        mon = self.state.active
+        name = self.species_name(mon.current_id, self.state.language) if mon else ""
+        if events.ditto_revealed:
+            self.celebration = {
+                "kind": "ditto",
+                "title": "Huh? It's Ditto!",
+                "detail": "Your companion was a Ditto all along.",
+            }
+        elif events.graduated is not None:
+            self.celebration = {
+                "kind": "graduated",
+                "title": "Graduated!",
+                "detail": f"{name or 'It'} joined your Pokedex.",
+            }
+        elif events.evolved_to is not None:
+            self.celebration = {
+                "kind": "evolved",
+                "title": "Evolved!",
+                "detail": f"It became {name}." if name else "It evolved.",
+            }
+        elif events.hatched is not None:
+            shiny = mon is not None and mon.is_shiny
+            self.celebration = {
+                "kind": "shiny" if shiny else "hatched",
+                "title": "A shiny hatched!" if shiny else "It hatched!",
+                "detail": (
+                    f"A shiny {name} — 1 in {balance.SHINY_DENOMINATOR}!"
+                    if shiny
+                    else f"{name} came out of the egg."
+                ),
+            }
 
     def _line_for_egg(self):
         """Species data for a hatch, or None when offline."""

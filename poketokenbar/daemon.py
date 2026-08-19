@@ -183,8 +183,13 @@ class Daemon:
             periods=periods,
             burn=self.burn.payload() if self.burn is not None else None,
             provider_status=status_payload,
+            celebration=self.companion_store.celebration if self.companion_store else None,
         )
         state.write(self.state_path, payload)
+        # Cleared after publishing so the banner shows once rather than
+        # persisting until the next hatch.
+        if self.companion_store is not None:
+            self.companion_store.celebration = None
         return payload
 
     def run(self) -> None:

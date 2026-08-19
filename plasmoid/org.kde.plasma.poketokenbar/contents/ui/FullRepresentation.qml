@@ -23,6 +23,12 @@ PlasmaExtras.Representation {
     readonly property var rarityCounts: root.appState && root.appState.rarity_counts
                                         ? root.appState.rarity_counts : ({})
     readonly property var burn: root.appState && root.appState.burn ? root.appState.burn : ({})
+    readonly property var strings: root.appState && root.appState.strings
+                                   ? root.appState.strings : ({})
+    readonly property var celebration: root.appState && root.appState.celebration
+                                       && root.appState.celebration.kind
+                                       ? root.appState.celebration : null
+    property string lastUpdatedText: ""
     readonly property var providerStatus: root.appState && root.appState.provider_status
                                           ? root.appState.provider_status : ({})
     // The daemon writes updated_at every poll. If it stops, the numbers freeze
@@ -149,6 +155,40 @@ PlasmaExtras.Representation {
                 ColumnLayout {
                     width: full.width - Kirigami.Units.gridUnit
                     spacing: Kirigami.Units.smallSpacing
+
+                    // --- celebration banner ---
+                    Rectangle {
+                        Layout.fillWidth: true
+                        visible: full.celebration !== null
+                        implicitHeight: celebrationCol.implicitHeight + Kirigami.Units.largeSpacing
+                        radius: Kirigami.Units.smallSpacing
+                        color: full.celebration && full.celebration.kind === "shiny"
+                               ? "#8a6d1f"
+                               : Kirigami.Theme.highlightColor
+
+                        ColumnLayout {
+                            id: celebrationCol
+                            anchors.centerIn: parent
+                            width: parent.width - Kirigami.Units.largeSpacing
+                            spacing: 0
+
+                            PlasmaComponents.Label {
+                                text: full.celebration
+                                      ? (full.celebration.kind === "shiny" ? "✨ " : "")
+                                        + full.celebration.title
+                                      : ""
+                                color: "white"
+                                font.bold: true
+                            }
+                            PlasmaComponents.Label {
+                                text: full.celebration ? full.celebration.detail : ""
+                                color: "white"
+                                opacity: 0.9
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                            }
+                        }
+                    }
 
                     // --- companion ---
                     RowLayout {
@@ -913,6 +953,19 @@ PlasmaExtras.Representation {
                 visible: full.stale
                 text: i18n("⚠ Data is stale — is poketokend running?")
                 color: Kirigami.Theme.neutralTextColor
+            }
+
+            PlasmaComponents.Label {
+                visible: !full.stale && text.length > 0
+                opacity: 0.6
+                text: {
+                    if (!root.appState || !root.appState.updated_at)
+                        return "";
+                    var age = Math.round(Date.now() / 1000 - root.appState.updated_at);
+                    if (age < 60)
+                        return i18n("Updated just now");
+                    return i18n("Updated %1 min ago", Math.round(age / 60));
+                }
             }
 
             QQC2.ToolButton {
