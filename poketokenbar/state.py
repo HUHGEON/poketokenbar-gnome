@@ -52,6 +52,9 @@ def build(
     scanning: bool = False,
     limit_status=None,
     companion_payload: dict | None = None,
+    shop_payload: list | None = None,
+    bag_payload: list | None = None,
+    dex_payload: list | None = None,
 ) -> dict:
     total_tokens = sum(d.total_tokens for d in daily_by_provider.values())
     total_cost = sum(d.total_cost for d in daily_by_provider.values())
@@ -85,6 +88,9 @@ def build(
         },
         "limits": _limits_payload(limit_status),
         "companion": companion_payload or {},
+        "shop": shop_payload or [],
+        "bag": bag_payload or [],
+        "dex": dex_payload or [],
         "panel": {
             "tokens_text": fmt.compact(total_tokens)
             if config_values.get("show_tokens_in_menu")

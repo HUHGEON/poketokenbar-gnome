@@ -10,7 +10,8 @@ from . import commands, config
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv:
-        print("usage: poketokenctl {set <key> <value>|refresh}", file=sys.stderr)
+        print("usage: poketokenctl {set <key> <value>|refresh|buy <key>|use <key>}",
+              file=sys.stderr)
         return 2
 
     action, rest = argv[0], argv[1:]
@@ -28,6 +29,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if action == "refresh":
         commands.enqueue("refresh", {})
+        return 0
+
+    if action in ("buy", "use"):
+        if len(rest) != 1:
+            print(f"usage: poketokenctl {action} <key>", file=sys.stderr)
+            return 2
+        commands.enqueue(action, {"key": rest[0]})
         return 0
 
     print(f"unknown command: {action}", file=sys.stderr)

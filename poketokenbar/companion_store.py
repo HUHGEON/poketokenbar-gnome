@@ -12,8 +12,9 @@ import random
 from datetime import date as _date
 from pathlib import Path
 
-from . import balance, companion, pokeapi, save, sprites
+from . import balance, companion, pokeapi, save, shop, sprites
 from .companion import CompanionState
+from .format import compact as _compact
 
 
 class CompanionStore:
@@ -156,6 +157,75 @@ class CompanionStore:
             "dex_count": len(self.state.dex),
             "spendable_tokens": self.state.spendable_tokens,
         }
+
+    # --- economy -----------------------------------------------------------
+
+    def grant_candy(self, windows: dict[str, float]) -> int:
+        granted = shop.grant_candy(self.state, windows)
+        self._persist()
+        return granted
+
+    def buy(self, key: str) -> str:
+        message = shop.buy(self.state, key)
+        self._persist()
+        return message
+
+    def use_item(self, key: str) -> str:
+        message = shop.use_item(self.state, key, rng=self.rng)
+        self._persist()
+        return message
+
+    def shop_payload(self) -> list[dict]:
+        spendable = self.state.spendable_tokens
+        return [
+            {
+                "key": e.key,
+                "kind": e.kind,
+                "price": e.price,
+                "price_text": _compact(e.price),
+                "label": e.label,
+                "owned": e.owned,
+                "affordable": spendable >= e.price and not e.owned,
+            }
+            for e in shop.entries(self.state)
+        ]
+
+    def bag_payload(self) -> list[dict]:
+        labels = {"rareCandy": "Rare Candy", "mint": "Mint", "shinyCharm": "Shiny Charm"}
+        emoji = {"rareCandy": "\N{CANDY}", "mint": "\N{HERB}", "shinyCharm": "\N{SPARKLES}"}
+        return [
+            {
+                "key": key,
+                "label": labels.get(key, key),
+                "emoji": emoji.get(key, "?"),
+                "count": count,
+                # Passive items are held, not consumed.
+                "usable": key in ("rareCandy", "mint") and self.state.active is not None,
+                "passive": key == "shinyCharm",
+            }
+            for key, count in sorted(self.state.inventory.items())
+            if count > 0
+        ]
+
+    def dex_payload(self) -> list[dict]:
+        out = []
+        for entry in self.state.dex:
+            sprite = ""
+            if self.sprites is not None:
+                path = self.sprites.path(entry.final_id, animated=False, shiny=entry.is_shiny)
+                sprite = str(path) if path else ""
+            out.append(
+                {
+                    "final_id": entry.final_id,
+                    "name": self.species_name(entry.final_id, self.state.language),
+                    "rarity": str(entry.rarity),
+                    "is_shiny": entry.is_shiny,
+                    "nature": entry.nature,
+                    "sprite_path": sprite,
+                }
+            )
+        # Dex order is by species number, matching the games.
+        return sorted(out, key=lambda d: d["final_id"])
 
     def _persist(self) -> None:
         save.save(self.state, self.save_path)

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import commands, config, state
 from .companion_store import CompanionStore
+from .notify import Notifier
 from .limits_source import LimitsSource
 from .pokeapi import PokeAPI
 from .sprites import SpriteStore
@@ -18,7 +19,7 @@ from .models import DailyUsage
 class Daemon:
     def __init__(
         self, state_path: Path, config_path: Path, cache, providers,
-        limits_source=None, companion_store=None,
+        limits_source=None, companion_store=None, notifier=None,
     ) -> None:
         self.state_path = state_path
         self.config_path = config_path
@@ -27,16 +28,29 @@ class Daemon:
         # Injected so tests never reach the network. None disables limits.
         self.limits_source = limits_source
         self.companion_store = companion_store
+        self.notifier = notifier
         self.spool: Path | None = None
         self.config_values = config.load(config_path)
 
     def poll_once(self) -> dict:
+        errors: list[str] = []
         for command in commands.drain(spool=self.spool):
-            if command.get("name") == "reload_config":
+            name = command.get("name")
+            if name == "reload_config":
                 self.config_values = config.load(self.config_path)
+            elif name in ("buy", "use") and self.companion_store is not None:
+                key = (command.get("args") or {}).get("key", "")
+                try:
+                    if name == "buy":
+                        message = self.companion_store.buy(key)
+                    else:
+                        message = self.companion_store.use_item(key)
+                    if self.notifier is not None:
+                        self.notifier._send("PokeTokenBar", message)
+                except Exception as exc:
+                    errors.append(f"{name}: {exc}")
 
         daily_by_provider: dict[str, DailyUsage] = {}
-        errors: list[str] = []
         for provider in self.providers:
             try:
                 daily = provider.fetch_daily()
@@ -61,6 +75,30 @@ class Daemon:
                     {pid: d.total_tokens for pid, d in daily_by_provider.items()}
                 )
                 companion_payload = self.companion_store.payload()
+                # Candy and notifications ride on fresh limits.
+                if limit_status is not None:
+                    windows = {}
+                    if limit_status.session is not None:
+                        windows["session"] = limit_status.session.utilization
+                    if limit_status.weekly is not None:
+                        windows["weekly"] = limit_status.weekly.utilization
+                    self.companion_store.grant_candy(windows)
+                    if self.notifier is not None and self.config_values.get(
+                        "limit_notifications", True
+                    ):
+                        self.notifier.limits(
+                            windows,
+                            float(self.config_values.get("warn_threshold", 80)),
+                            float(self.config_values.get("crit_threshold", 95)),
+                        )
+                if self.notifier is not None and self.config_values.get(
+                    "companion_notifications", True
+                ):
+                    self.notifier.companion(
+                        self.companion_store.last_events,
+                        companion_payload.get("name"),
+                    )
+                    self.companion_store.last_events = None
             except Exception as exc:
                 # The companion is cosmetic; never let it break the numbers.
                 errors.append(f"companion: {exc}")
@@ -71,6 +109,9 @@ class Daemon:
             errors,
             limit_status=limit_status,
             companion_payload=companion_payload,
+            shop_payload=self.companion_store.shop_payload() if self.companion_store else None,
+            bag_payload=self.companion_store.bag_payload() if self.companion_store else None,
+            dex_payload=self.companion_store.dex_payload() if self.companion_store else None,
         )
         state.write(self.state_path, payload)
         return payload
@@ -108,6 +149,7 @@ def main() -> int:
         companion_store=CompanionStore(
             api=PokeAPI(), sprite_store=SpriteStore()
         ),
+        notifier=Notifier(),
     )
     try:
         daemon.run()
