@@ -12,7 +12,7 @@ import random
 from datetime import date as _date
 from pathlib import Path
 
-from . import balance, companion, pokeapi, save, shop, sprites
+from . import balance, companion, l10n, pokeapi, save, shop, sprites
 from .companion import CompanionState
 from .format import compact as _compact
 
@@ -149,7 +149,7 @@ class CompanionStore:
                 "spendable_tokens": self.state.spendable_tokens,
                 "spendable_text": _compact(self.state.spendable_tokens),
                 "display_state": kind,
-                "status_message": companion.STATUS_MESSAGE.get(kind, ""),
+                "status_message": l10n.t(f"status_{kind.lower()}", self.state.language),
             }
 
         threshold = balance.phase_threshold(mon.rarity, mon.total_forms, mon.stage_index)
@@ -193,7 +193,7 @@ class CompanionStore:
             "spendable_tokens": self.state.spendable_tokens,
             "spendable_text": _compact(self.state.spendable_tokens),
             "display_state": kind,
-            "status_message": companion.STATUS_MESSAGE.get(kind, ""),
+            "status_message": l10n.t(f"status_{kind.lower()}", self.state.language),
         }
 
     # --- economy -----------------------------------------------------------

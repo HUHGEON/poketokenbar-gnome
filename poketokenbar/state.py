@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from . import format as fmt
-from . import limits
+from . import l10n, limits
 from .models import DailyUsage
 
 SCHEMA_VERSION = 1
@@ -100,6 +100,7 @@ def build(
         "catch_log": catch_log or [],
         "rarity_counts": rarity_counts or {},
         "periods": periods or {},
+        "strings": l10n.catalogue(config_values.get("language", "en")),
         "burn": burn or {},
         "provider_status": provider_status or {},
         "panel": {

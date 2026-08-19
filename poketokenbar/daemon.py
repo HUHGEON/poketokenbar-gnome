@@ -112,6 +112,12 @@ class Daemon:
         companion_payload = None
         if self.companion_store is not None:
             try:
+                # One language, not two. The catalogue reads config while the
+                # companion reads the save, so they must be kept in step or the
+                # popup renders half-translated.
+                self.companion_store.state.language = str(
+                    self.config_values.get("language", "en")
+                )
                 self.companion_store.update(
                     {pid: d.total_tokens for pid, d in daily_by_provider.items()}
                 )

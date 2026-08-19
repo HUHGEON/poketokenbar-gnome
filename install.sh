@@ -24,9 +24,11 @@ EOF
 chmod +x "$HOME/.local/bin/poketokenctl"
 
 echo "==> installing plasmoid"
-plasmoid_dir="$HOME/.local/share/plasma/plasmoids/org.kde.plasma.poketokenbar"
-mkdir -p "$plasmoid_dir"
-rsync -a --delete "$here/plasmoid/org.kde.plasma.poketokenbar/" "$plasmoid_dir/"
+for pkg in org.kde.plasma.poketokenbar org.kde.plasma.poketokenpet; do
+  plasmoid_dir="$HOME/.local/share/plasma/plasmoids/$pkg"
+  mkdir -p "$plasmoid_dir"
+  rsync -a --delete "$here/plasmoid/$pkg/" "$plasmoid_dir/"
+done
 
 echo "==> installing systemd unit"
 mkdir -p "$HOME/.config/systemd/user"

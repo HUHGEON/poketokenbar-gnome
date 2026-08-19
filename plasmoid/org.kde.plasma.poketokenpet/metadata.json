@@ -1,0 +1,15 @@
+{
+  "KPlugin": {
+    "Id": "org.kde.plasma.poketokenpet",
+    "Name": "PokeTokenBar Pet",
+    "Description": "Your PokeTokenBar companion, floating on the desktop",
+    "Icon": "face-smile",
+    "Version": "0.1.0",
+    "License": "MIT",
+    "Authors": [{ "Name": "Ruben Sanchez Rivero" }],
+    "Category": "System Information",
+    "ServiceTypes": ["Plasma/Applet"]
+  },
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "KPackageStructure": "Plasma/Applet"
+}
