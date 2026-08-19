@@ -142,7 +142,12 @@ PlasmaExtras.Representation {
                             return "";
                         if (full.companion.stage === "egg")
                             return i18n("Egg");
-                        var bits = ["#" + full.companion.species_id];
+                        var bits = [];
+                        // Fall back to the dex number only when the name has
+                        // not been cached yet (first hatch while offline).
+                        bits.push(full.companion.name
+                                  ? full.companion.name
+                                  : "#" + full.companion.species_id);
                         if (full.companion.is_shiny)
                             bits.push(i18n("Shiny"));
                         if (full.companion.nature)
@@ -170,10 +175,11 @@ PlasmaExtras.Representation {
                         if (full.companion.stage === "egg")
                             return i18n("%1% incubated \u00B7 hatches at 5M tokens",
                                         Math.round(full.companion.egg_progress * 100));
-                        return i18n("Stage %1 of %2 \u00B7 %3",
+                        return i18n("Stage %1 of %2 \u00B7 %3 \u00B7 %4%",
                                     full.companion.stage_index + 1,
                                     full.companion.total_forms,
-                                    full.companion.rarity);
+                                    full.companion.rarity,
+                                    Math.round(full.companion.stage_progress * 100));
                     }
                     opacity: 0.7
                 }

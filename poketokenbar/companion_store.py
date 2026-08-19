@@ -90,6 +90,29 @@ class CompanionStore:
 
     # --- presentation ------------------------------------------------------
 
+    def species_name(self, species_id: int, language: str = "en") -> str:
+        """Localised species name, or "" when unknown.
+
+        Reads the on-disk species cache the line lookup already populated, so
+        this costs nothing after the hatch and stays silent when offline.
+        """
+        if self.api is None:
+            return ""
+        try:
+            entry = self.api.species(species_id)
+        except Exception:
+            return ""
+        names = {
+            n["language"]["name"]: n["name"]
+            for n in entry.get("names", [])
+            if n.get("language", {}).get("name")
+        }
+        # ja-Hrkt is the kana form PokeAPI uses for Japanese.
+        for code in ({"ja": ["ja-Hrkt", "ja"]}.get(language, [language])):
+            if names.get(code):
+                return names[code]
+        return names.get("en", "")
+
     def sprite_path(self) -> str:
         mon = self.state.active
         if mon is None or self.sprites is None:
@@ -118,6 +141,7 @@ class CompanionStore:
             "stage": "mon",
             "label": "",
             "species_id": mon.current_id,
+            "name": self.species_name(mon.current_id, self.state.language),
             "is_shiny": mon.is_shiny,
             "nature": mon.nature,
             "rarity": str(mon.rarity),
