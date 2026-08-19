@@ -1,0 +1,74 @@
+"""state.json — the daemon's only output to the UI.
+
+Written atomically (temp + rename) so the plasmoid, which polls, can never
+read a torn file. Always parses: a failing poll produces errors[], never a
+partial document.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+from pathlib import Path
+
+from . import format as fmt
+from .models import DailyUsage
+
+SCHEMA_VERSION = 1
+
+
+def default_path() -> Path:
+    base = os.environ.get("XDG_STATE_HOME") or (Path.home() / ".local" / "state")
+    return Path(base) / "poketokenbar" / "state.json"
+
+
+def build(
+    daily_by_provider: dict[str, DailyUsage],
+    config_values: dict,
+    errors: list[str],
+    scanning: bool = False,
+) -> dict:
+    total_tokens = sum(d.total_tokens for d in daily_by_provider.values())
+    total_cost = sum(d.total_cost for d in daily_by_provider.values())
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "updated_at": time.time(),
+        "scanning": scanning,
+        "errors": errors,
+        "today": {
+            "total_tokens": total_tokens,
+            "total_cost": total_cost,
+            "tokens_grouped": fmt.grouped(total_tokens),
+            "cost_text": fmt.cost(total_cost),
+        },
+        "providers": {
+            pid: {
+                "total_tokens": d.total_tokens,
+                "total_cost": d.total_cost,
+                "input_tokens": d.input_tokens,
+                "output_tokens": d.output_tokens,
+                "cache_creation_tokens": d.cache_creation_tokens,
+                "cache_read_tokens": d.cache_read_tokens,
+            }
+            for pid, d in daily_by_provider.items()
+        },
+        "panel": {
+            "tokens_text": fmt.compact(total_tokens)
+            if config_values.get("show_tokens_in_menu")
+            else "",
+            "cost_text": fmt.cost_compact(total_cost)
+            if config_values.get("show_cost_in_menu")
+            else "",
+            "limit_text": "",  # populated in Plan 2
+            "sprite_path": "",  # populated in Plan 3
+        },
+    }
+
+
+def write(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    tmp.replace(path)

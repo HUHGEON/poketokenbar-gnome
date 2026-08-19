@@ -1,0 +1,48 @@
+import pytest
+
+from poketokenbar import config
+
+
+def test_load_returns_defaults_when_file_absent(tmp_path):
+    values = config.load(tmp_path / "config.json")
+    assert values["refresh_interval"] == 120
+    assert values["show_tokens_in_menu"] is True
+
+
+def test_load_merges_partial_file_over_defaults(tmp_path):
+    p = tmp_path / "config.json"
+    p.write_text('{"refresh_interval": 30}', encoding="utf-8")
+    values = config.load(p)
+    assert values["refresh_interval"] == 30
+    assert values["warn_threshold"] == 80
+
+
+def test_load_falls_back_to_defaults_on_corrupt_file(tmp_path):
+    p = tmp_path / "config.json"
+    p.write_text("{not json", encoding="utf-8")
+    assert config.load(p) == config.DEFAULTS
+
+
+def test_unknown_keys_are_dropped(tmp_path):
+    p = tmp_path / "config.json"
+    p.write_text('{"nonsense": 1}', encoding="utf-8")
+    assert "nonsense" not in config.load(p)
+
+
+def test_set_value_coerces_to_the_default_type(tmp_path):
+    p = tmp_path / "config.json"
+    config.set_value(p, "refresh_interval", "30")
+    config.set_value(p, "show_cost_in_menu", "true")
+    values = config.load(p)
+    assert values["refresh_interval"] == 30
+    assert values["show_cost_in_menu"] is True
+
+
+def test_set_value_rejects_unknown_key(tmp_path):
+    with pytest.raises(KeyError):
+        config.set_value(tmp_path / "config.json", "nonsense", "1")
+
+
+def test_set_value_rejects_uncoercible_value(tmp_path):
+    with pytest.raises(ValueError):
+        config.set_value(tmp_path / "config.json", "refresh_interval", "soon")
