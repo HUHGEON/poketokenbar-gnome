@@ -1,223 +1,213 @@
-# PokeTokenBar for Linux / KDE Plasma
-
-An unofficial Linux port of [**PokeTokenBar**](https://github.com/chattymin/PokeTokenBar)
-by [**chattymin**](https://github.com/chattymin) — the macOS menu bar app that turns the
-AI coding tokens you're already burning into a growing Pokémon companion.
-
-This directory adds a Python daemon and two KDE Plasma 6 widgets that reproduce
-that experience on Linux. **Everything in the original macOS app is untouched** —
-no file under `Sources/`, `Tests/`, `Package.swift`, or `scripts/` was modified.
-
 <div align="center">
-<img src="assets/panel.png" alt="The panel widget: companion sprite beside the 5-hour and weekly limit percentages" width="380">
-<br><em>Your companion beside the 5-hour and weekly limits, coloured by how close you are.</em>
+
+<img src="assets/logo.png" width="300" alt="PokeTokenBar + KDE Plasma">
+
+# PokeTokenBar for Plasma
+
+**Your AI coding tokens, hatched into Pokémon — right in your KDE panel.**
+
+[![Release](https://img.shields.io/github/v/release/rubensanchezrivero/poketokenbar-plasma?color=444d56&label=release)](https://github.com/rubensanchezrivero/poketokenbar-plasma/releases)
+[![KDE Plasma](https://img.shields.io/badge/KDE%20Plasma-6-1d99f3?logo=kde&logoColor=white)](https://kde.org/plasma-desktop/)
+[![Qt](https://img.shields.io/badge/Qt-6-41cd52?logo=qt&logoColor=white)](https://www.qt.io/)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
+[![Arch](https://img.shields.io/badge/Arch-PKGBUILD-1793d1?logo=archlinux&logoColor=white)](packaging/PKGBUILD)
+[![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
+[![Upstream](https://img.shields.io/badge/upstream-chattymin%2FPokeTokenBar-ea4aaa?logo=github&logoColor=white)](https://github.com/chattymin/PokeTokenBar)
+
+**An unofficial Linux port of [PokeTokenBar](https://github.com/chattymin/PokeTokenBar) by [chattymin](https://github.com/chattymin).**
+
+<img src="assets/panel.gif" width="360" alt="The panel widget: an animated companion beside the 5-hour and weekly limit percentages">
+
 </div>
 
----
+PokeTokenBar for Plasma turns the AI coding tokens you're already burning — Claude Code and Codex — into a growing **Pokémon companion** in your KDE panel. Spend tokens, hatch an egg, evolve it through its real evolution line, graduate it into your Pokédex, and start again. Underneath the companion it's a precise usage tracker — today's spend, cost, and official 5-hour / weekly limits, read straight from your local logs.
 
-## Credits
+> Token usage is read directly from local Claude Code and Codex data (`totalTokens` = input + output + cache, local date) — no external CLI needed. Unofficial, non-commercial Pokémon fan project — see [License & disclaimer](#license--disclaimer).
 
-**All original design, game balance, and the idea belong to
-[chattymin](https://github.com/chattymin)** and the contributors to the upstream
-[PokeTokenBar](https://github.com/chattymin/PokeTokenBar) project. This is a port,
-not a reimagining: the token economy, evolution pacing, rarity curve, hatch
-thresholds, shiny odds, and shop prices are all copied verbatim from the Swift
-source because they are tuned values, and changing them would change the game.
+## Why
 
-- Upstream project: <https://github.com/chattymin/PokeTokenBar> (MIT)
-- Pokémon data and sprites: [PokéAPI](https://pokeapi.co/) and
-  [PokeAPI/sprites](https://github.com/PokeAPI/sprites), fetched at runtime and
-  cached locally — nothing is bundled in this repository
-- Pokémon is a trademark of Nintendo / Creatures Inc. / GAME FREAK Inc.
-  This is an unofficial, non-commercial fan project with no affiliation
+- **The usage tracker you actually enjoy opening.** Your spend raises a Pokémon that hatches, evolves, graduates, and fills a Pokédex — and every shiny is a reason to check back.
+- See today's token spend & cost at a glance — no dashboard, no browser tab.
+- Track official **5-hour / weekly** limits with reset countdowns and a burn-rate forecast for when you'll hit them.
 
-If you like this, **star the upstream repo, not this fork.** The good idea is theirs.
+## How it works
 
-## How this was built
+1. 🥚 **Code as usual.** The tokens you burn in Claude Code or Codex incubate an egg — nothing extra to run.
+2. 🐣 **Hatch.** Eggs hatch into Pokémon with real evolution lines from [PokéAPI](https://pokeapi.co/) — any Gen 1–5 line (328 possible starts), weighted by the official capture rate: commons hatch often, a legendary is rare. It appears in your **Collection** immediately while you raise it. Every hatch rolls one of 25 natures — and once in a rare while, the egg hatches **✨ Shiny**.
+3. ⚡ **Evolve.** Keep coding and it grows through its actual evolution tree, with a celebration banner at each step.
+4. 🎓 **Graduate & collect.** Final form + threshold permanently archives it in your **Pokédex** — rarer takes longer — and a fresh egg arrives.
+5. 🍬 **Max out, get a candy.** Fill a 5-hour or weekly usage limit and you earn **Rare Candy** — spend it from the **Bag** to grow your current Pokémon.
+6. 🛒 **Spend at the Shop.** Every token you've used is spendable currency — buy **Rare Candy**, a **Mint** that re-rolls your Pokémon's nature, a **Shiny Charm** that permanently raises your shiny odds, or an egg to send off your current companion and start over.
 
-**This port was vibe-coded.** Essentially all of the Python and QML here was
-written by Claude (Anthropic's Claude Code) across a single long session, working
-from the Swift source as the specification, with me steering, testing on my own
-machine, and sending screenshots of the macOS app when the port drifted from it.
+## Tour
 
-Being blunt about what that means:
+<table>
+<tr>
+<td width="55%" valign="top">
+<h3>🏠 Home</h3>
+Your companion with its rarity, nature, and evolution line — dimmed forms are the ones it hasn't reached yet. Today's tokens and cost, this week, this month, and a per-provider breakdown of input, output, and cache. Then the official limits with reset countdowns and a burn-rate forecast.
+</td>
+<td width="45%" align="center"><img src="assets/popup-home.png" width="300" alt="Home tab"></td>
+</tr>
+<tr>
+<td width="45%" align="center"><img src="assets/popup-shop.png" width="300" alt="Shop tab"></td>
+<td width="55%" valign="top">
+<h3>🛒 Shop &amp; Bag</h3>
+Spend the tokens you've already used. Rare Candy, Mint, Shiny Charm, and three grades of egg — plain, Uncommon-guaranteed, and Rare-guaranteed. The Bag shows what you're holding and what each item does.
+</td>
+</tr>
+<tr>
+<td width="55%" valign="top">
+<h3>📕 Collection</h3>
+A species-level Pokédex with rarity filters and paging — every form you've actually been, including the one you're raising right now. The Catch log records each individual instead: its full evolution chain, its nature, and how long it took.
+</td>
+<td width="45%" align="center"><img src="assets/popup-collection.png" width="300" alt="Collection tab"></td>
+</tr>
+</table>
 
-- **It is verified where verification was possible, and not where it wasn't.**
-  The Claude Code parser was checked against my real 559 MB of logs. The Codex
-  parser was checked against the upstream Swift test fixtures and matches their
-  expected totals exactly (312,814 and 369,215). The companion engine, save
-  decoding, and economy have 265 tests.
-- **Several bugs were only caught because I looked at the screen.** The panel
-  silently failed for an entire iteration because Qt blocks `XMLHttpRequest` on
-  `file://` URLs; the Pokédex hid the active companion because I built it from
-  graduated entries only; the settings dialog opened empty because Plasma
-  requires a `cfg_<key>Default` property I hadn't declared. Tests did not catch
-  any of those.
-- **Read the code before trusting it with anything that matters.** It only reads
-  local log files and one Anthropic endpoint, but you should confirm that
-  yourself rather than take my word for it.
+### In your panel
 
-## What works
+An animated Gen-V sprite lives next to your 5-hour and weekly limit percentages, coloured green, yellow, or red as you approach the cap. Add today's tokens or cost — or turn everything off for a character-only panel.
 
-| | |
+### 🐾 Let it live on your desktop
+
+A second widget puts your companion on the desktop at any size from 48 to 192px. Hover it for its mood, click for progress, right-click for a menu — and limit alerts can appear as a speech bubble above it.
+
+## Also in the box
+
+- **Burn-rate forecast** — projects when the current 5-hour window hits 100%, from the utilization trend.
+- **Desktop notifications** — hatch, evolution, graduation, and limit warnings via `notify-send`.
+- **Rare Candy grants** — fill a limit window and earn candy; weekly pays more than a session.
+- **Ditto disguise** — once in a rare while a common hatch is secretly a Ditto, and reveals itself when it "evolves".
+- **Provider status** — Claude and OpenAI incidents surface in the popup when they happen.
+- **Save export / import** — move your Pokédex, tokens, bag, and companion between machines.
+- **Stale detection** — if the daemon stops, the panel says so instead of quietly freezing.
+- **Four languages** — English, 한국어, 日本語, Español.
+
+## Works with
+
+| | Status |
 |---|---|
-| **Panel widget** | 5-hour and weekly limit percentages, colour-coded green/yellow/red, with your animated companion |
-| **Popup** | Home, Shop, Bag, Collection tabs |
-| **Usage tracking** | Claude Code and Codex, read from local logs — today, this week, this month, with cost |
-| **Official limits** | 5-hour and weekly utilization, reset countdowns, and a burn-rate forecast |
-| **Companion** | egg → hatch → evolve → graduate, 25 natures, shiny (1/64), Ditto disguise |
-| **Economy** | Rare Candy, Mint, Shiny Charm, three egg grades; candy awarded when a limit window fills |
-| **Collection** | species-level Pokédex with rarity filters and paging, plus a per-catch log |
-| **Floating pet** | a second desktop widget — drag, hover, right-click, speech bubbles |
-| **Notifications** | hatch, evolution, graduation, and limit warnings via `notify-send` |
-| **Languages** | English, 한국어, 日本語, Español |
+| **Claude Code** | ✅ verified against a real 559 MB log corpus |
+| **Codex** | ✅ verified against upstream's own test fixtures |
+| Gemini CLI, Antigravity, OpenCode, Hermes Agent, Cursor, Grok CLI, Copilot CLI, Kiro CLI | ❌ not ported — see [What's missing](#whats-missing) |
 
-## What is missing
-
-Compared to the macOS app:
-
-- **Eight of the ten usage providers.** Only Claude Code and Codex are ported.
-  Gemini, Grok, Hermes, Copilot, Cursor, OpenCode, Kiro, and Antigravity are not —
-  I have no data for any of them, so porting them would mean shipping code
-  nobody could verify. The provider interface is unchanged, so each is a single
-  file when someone who uses one wants to add it.
-- In-app updater, crash reporter, support mail, and Keychain handling — macOS
-  concepts with no Linux equivalent, or unnecessary here (Claude Code stores
-  credentials in plaintext on Linux).
-- A diagnostics/log viewer.
-
-## Requirements
-
-- KDE Plasma 6 (developed on 6.7.4, Qt 6.11)
-- Python 3.12+
-- `notify-send` for notifications (optional)
-- `orjson` is used if present and falls back to the standard library if not
+Official limits are read for Claude accounts.
 
 ## Install
 
-### Arch / CachyOS / EndeavourOS (recommended)
+### Requirements
+
+- KDE Plasma 6 (developed on 6.7.4, Qt 6.11)
+- Python 3.12+
+- `libnotify` for notifications (optional)
+- `python-orjson` for ~2× faster parsing (optional)
+
+### Arch / CachyOS / EndeavourOS
 
 ```bash
-git clone https://github.com/rubensanchezrivero/PokeTokenBar.git
-cd PokeTokenBar/linux/packaging
+git clone https://github.com/rubensanchezrivero/poketokenbar-plasma.git
+cd poketokenbar-plasma/packaging
 makepkg -si
 systemctl --user enable --now poketokend
 ```
 
-Installs system-wide, with no venv and no copies under `$HOME`. Uninstall with
-`sudo pacman -R poketokenbar-plasma`.
+Installs system-wide with no venv. Remove with `sudo pacman -R poketokenbar-plasma`.
 
 ### Any other distro
 
 ```bash
-git clone https://github.com/rubensanchezrivero/PokeTokenBar.git
-cd PokeTokenBar
-./linux/install.sh
+git clone https://github.com/rubensanchezrivero/poketokenbar-plasma.git
+cd poketokenbar-plasma
+./install.sh
 ```
 
-Self-contained: creates its own venv and installs everything under `$HOME`,
-touching nothing system-wide.
+Self-contained: creates its own venv and installs everything under `$HOME`.
 
 ### Widgets only
 
-If you'd rather run the daemon yourself, build installable bundles:
-
 ```bash
-./linux/packaging/build-plasmoids.sh
-kpackagetool6 -t Plasma/Applet -i linux/dist/org.kde.plasma.poketokenbar.plasmoid
-kpackagetool6 -t Plasma/Applet -i linux/dist/org.kde.plasma.poketokenpet.plasmoid
+./packaging/build-plasmoids.sh
+kpackagetool6 -t Plasma/Applet -i dist/org.kde.plasma.poketokenbar.plasmoid
+kpackagetool6 -t Plasma/Applet -i dist/org.kde.plasma.poketokenpet.plasmoid
 ```
-
-The widgets only render whatever the daemon writes to `state.json`, so the
-daemon still has to be running.
-
----
-
-With `install.sh`, everything lands under `$HOME`:
-
-| Path | Contents |
-|---|---|
-| `~/.local/share/poketokenbar/` | the Python package and its venv |
-| `~/.local/bin/poketokenctl` | control CLI |
-| `~/.local/share/plasma/plasmoids/` | the two widgets |
-| `~/.config/systemd/user/poketokend.service` | the daemon, enabled and started |
-| `~/.local/state/poketokenbar/state.json` | what the widgets render |
-| `~/.config/poketokenbar/config.json` | settings |
-| `~/.cache/poketokenbar/` | scan cache, sprites, PokéAPI data |
 
 Then right-click your panel → **Add Widgets** → **PokeTokenBar**.
 For the desktop pet, add **PokeTokenBar Pet** to your desktop.
 
-## Usage
+## Data sources
 
-Settings live in the widget's configuration dialog (gear icon in the popup, or
-right-click → Configure). Everything is also reachable from the CLI:
+| Path | Read for |
+|---|---|
+| `~/.claude/projects/**/*.jsonl` | Claude Code usage (also `~/.config/claude/projects`, `$CLAUDE_CONFIG_DIR`) |
+| `~/.codex/sessions/**/*.jsonl` | Codex usage |
+| `~/.claude/.credentials.json` | OAuth token for official limits |
+| `~/.claude.json` | which account those limits belong to |
+| [PokéAPI](https://pokeapi.co/) + [PokeAPI/sprites](https://github.com/PokeAPI/sprites) | species, evolution chains, sprites — fetched at runtime, cached locally |
 
-```bash
-poketokenctl set show_tokens_in_menu true
-poketokenctl set language ja
-poketokenctl refresh
-poketokenctl export ~/poketokenbar-save.json
-poketokenctl import ~/poketokenbar-save.json
-```
+Where the app keeps its own state:
 
-## A note if you use several Claude accounts
+| Path | Contents |
+|---|---|
+| `~/.local/state/poketokenbar/state.json` | what the widgets render |
+| `~/.config/poketokenbar/config.json` | settings |
+| `~/.local/share/poketokenbar/companion.json` | your save |
+| `~/.cache/poketokenbar/` | scan cache, sprites, PokéAPI data |
 
-Session logs under `~/.claude/projects/` carry **no account marker**, so token
-totals from every account you use on the machine are summed and cannot be
-separated. Limits, by contrast, come from `~/.claude/.credentials.json`, which
-only ever holds the account currently logged in.
+## Privacy & permissions
 
-The popup therefore names the account the limits belong to. If you want accounts
-kept fully apart, give each one its own `CLAUDE_CONFIG_DIR` — the parser honours
-it — though that currently needs one daemon per account.
+- **Everything is local.** Token counts come from log files already on your disk. No telemetry, no analytics, no account of ours.
+- **Three network calls, all optional.** PokéAPI for species data, GitHub for sprites, and `api.anthropic.com/api/oauth/usage` for your official limits using the token Claude Code already stored. If any fail, token counts keep working.
+- **No credentials leave your machine.** The OAuth token is read from `~/.claude/.credentials.json` and sent only to Anthropic.
+- **Nothing is bundled.** No Pokémon sprites or data ship in this repository; they're fetched at runtime and cached under `~/.cache`.
 
-## Architecture
+### If you use several Claude accounts
 
-A daemon owns all state; the widgets only render.
+Session logs carry **no account marker**, so token totals from every account on the machine are summed and cannot be separated. Limits come from whichever account is currently logged in — so the popup names that account beside them. To keep accounts apart, give each its own `CLAUDE_CONFIG_DIR`.
 
-```
-~/.claude/projects/**/*.jsonl ──▶ poketokend (Python, systemd --user)
-                                      │  parses, prices, grows the companion
-                                      ▼
-                         ~/.local/state/poketokenbar/state.json
-                                      │  polled every 2s
-                                      ▼
-                    Plasma widgets (QML)  ──▶ poketokenctl ──▶ daemon
-```
+## What's missing
 
-The companion has to keep growing while the popup is shut, and Plasma reloads
-applets whenever you edit the panel — so game state lives in the daemon, never in
-QML. Widgets talk back only through `poketokenctl`, which keeps validation in one
-place.
+Compared to the macOS original:
+
+- **Eight of the ten usage providers.** Only Claude Code and Codex are ported. I have no data for the others, so porting them would mean shipping parsers nobody could verify. The provider interface is unchanged — each is one file when someone who uses one wants to add it.
+- In-app updater, crash reporter, and Keychain handling — macOS concepts with no Linux equivalent, or unnecessary here.
+- A diagnostics / log viewer.
+
+## How this was built
+
+**This port was vibe-coded.** Essentially all of the Python and QML was written by Claude (Anthropic's Claude Code) in a single long session, using the upstream Swift source as the specification, with me steering, testing on my own machine, and sending screenshots when the port drifted.
+
+What that means in practice:
+
+- **It's verified where verification was possible.** The Claude Code parser was checked against my real 559 MB of logs; the Codex parser matches upstream's own test fixtures exactly (312,814 and 369,215). There are 265 tests.
+- **Several bugs were only caught by looking at the screen.** The panel silently failed for an entire iteration because Qt blocks `XMLHttpRequest` on `file://`; the Pokédex hid the active companion; the settings dialog opened empty because Plasma wants a `cfg_<key>Default` property. No test caught any of them.
+- **Read the code before trusting it.** It only reads local logs and one Anthropic endpoint — but confirm that yourself.
+
+## Credits
+
+**All original design, game balance, and the idea belong to [chattymin](https://github.com/chattymin)** and the contributors to [PokeTokenBar](https://github.com/chattymin/PokeTokenBar). This is a port, not a reimagining: the token economy, evolution pacing, rarity curve, hatch thresholds, shiny odds, and shop prices are copied verbatim from the Swift source, because they are tuned values.
+
+**If you like this, star [the upstream project](https://github.com/chattymin/PokeTokenBar), not this port.** The good idea is theirs.
+
+- Upstream: <https://github.com/chattymin/PokeTokenBar> (MIT)
+- Pokémon data & sprites: [PokéAPI](https://pokeapi.co/) — fetched at runtime, never bundled
+- KDE logo © [KDE e.V.](https://kde.org/), used to indicate Plasma compatibility
 
 ## Development
 
 ```bash
-cd linux
 python3 -m venv .venv && ./.venv/bin/pip install pytest
 ./.venv/bin/pytest -q
 ```
 
-The Swift sources are the specification. Port behaviour from them rather than
-re-deriving it, and read `docs/reference/defect-log.md` before touching a
-subsystem — it records bug classes the macOS app already paid for.
+The upstream Swift sources are the specification — port behaviour from them rather than re-deriving it.
 
-## Troubleshooting
+Architecture: a Python daemon owns all state and writes `state.json`; the QML widgets only render it and talk back through `poketokenctl`. The companion has to keep growing while the popup is shut, and Plasma reloads applets whenever you edit the panel — so game state never lives in QML.
 
-```bash
-systemctl --user status poketokend
-journalctl --user -u poketokend -n 50 --no-pager
-```
+## License & disclaimer
 
-If the panel shows nothing, the daemon isn't writing `state.json` — read the
-journal before changing anything. After editing QML, Plasma caches compiled
-bytecode; `rm -rf ~/.cache/plasmashell && systemctl --user restart
-plasma-plasmashell` forces a reload.
+MIT — see [LICENSE](LICENSE). The MIT licence covers this project's source code only; it grants no rights to third-party trademarks, artwork, or data.
 
-The first scan parses every log file (~9 s on 559 MB here); later scans are
-~0.1 s from the incremental cache.
+Pokémon is a trademark of Nintendo / Creatures Inc. / GAME FREAK Inc. This is an **unofficial, non-commercial fan project** with no affiliation to Nintendo, Game Freak, Creatures Inc., The Pokémon Company, Anthropic, OpenAI, or KDE e.V.
 
-## Licence
-
-MIT, same as upstream. See [`LICENSE`](../LICENSE).
+If you are a rights holder with a concern about this project, please open an issue and I'll respond promptly.
