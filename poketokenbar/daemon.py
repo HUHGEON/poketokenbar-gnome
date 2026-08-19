@@ -6,7 +6,7 @@ import os
 import time
 from pathlib import Path
 
-from . import commands, config, state
+from . import commands, config, limits, state
 from .cache import ScanCache
 from .models import DailyUsage
 
@@ -36,7 +36,17 @@ class Daemon:
             if daily is not None:
                 daily_by_provider[provider.id] = daily
 
-        payload = state.build(daily_by_provider, self.config_values, errors)
+        limit_status = None
+        try:
+            limit_status = limits.fetch_status()
+        except limits.LimitsError as exc:
+            # Best effort: limits failing hides that section but must never
+            # affect the token counts, which come from local logs.
+            errors.append(f"limits: {exc}")
+
+        payload = state.build(
+            daily_by_provider, self.config_values, errors, limit_status=limit_status
+        )
         state.write(self.state_path, payload)
         return payload
 

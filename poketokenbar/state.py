@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from . import format as fmt
+from . import limits
 from .models import DailyUsage
 
 SCHEMA_VERSION = 1
@@ -23,14 +24,37 @@ def default_path() -> Path:
     return Path(base) / "poketokenbar" / "state.json"
 
 
+def _limits_payload(status) -> dict:
+    """Serialise a limits.LimitStatus, or an empty dict when unavailable."""
+    if status is None:
+        return {}
+
+    def window(w):
+        if w is None:
+            return None
+        return {
+            "utilization": w.utilization,
+            "resets_at": w.resets_at,
+            "severity": w.severity,
+        }
+
+    return {
+        "session": window(status.session),
+        "weekly": window(status.weekly),
+        "plan": status.subscription_type,
+    }
+
+
 def build(
     daily_by_provider: dict[str, DailyUsage],
     config_values: dict,
     errors: list[str],
     scanning: bool = False,
+    limit_status=None,
 ) -> dict:
     total_tokens = sum(d.total_tokens for d in daily_by_provider.values())
     total_cost = sum(d.total_cost for d in daily_by_provider.values())
+    limit_mode = config_values.get("limit_display_mode", "both")
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -54,6 +78,7 @@ def build(
             }
             for pid, d in daily_by_provider.items()
         },
+        "limits": _limits_payload(limit_status),
         "panel": {
             "tokens_text": fmt.compact(total_tokens)
             if config_values.get("show_tokens_in_menu")
@@ -61,7 +86,9 @@ def build(
             "cost_text": fmt.cost_compact(total_cost)
             if config_values.get("show_cost_in_menu")
             else "",
-            "limit_text": "",  # populated in Plan 2
+            "limit_text": limits.panel_text(limit_status, limit_mode)
+            if config_values.get("show_limit_in_menu")
+            else "",
             "sprite_path": "",  # populated in Plan 3
         },
     }
