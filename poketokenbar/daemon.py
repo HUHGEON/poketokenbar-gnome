@@ -180,6 +180,7 @@ class Daemon:
             dex_payload=self.companion_store.dex_payload() if self.companion_store else None,
             catch_log=self.companion_store.catch_log_payload() if self.companion_store else None,
             rarity_counts=self.companion_store.rarity_counts() if self.companion_store else None,
+            catch_counts=self.companion_store.catch_rarity_counts() if self.companion_store else None,
             periods=periods,
             burn=self.burn.payload() if self.burn is not None else None,
             provider_status=status_payload,

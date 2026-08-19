@@ -311,24 +311,60 @@ class CompanionStore:
         ]
 
     def dex_payload(self) -> list[dict]:
-        out = []
+        """Species-level collection — ports dexSpecies.
+
+        Includes every species in a graduated chain, plus the CURRENT
+        companion's reached forms only (path_ids up to stage_index). The
+        planned path is never used: it contains stages not yet evolved into,
+        which would list species that have never been owned.
+
+        A species backed only by the current companion is flagged is_raising —
+        buying an egg discards that companion and the entry disappears, so it
+        is not yet permanent.
+        """
+        acc: dict[int, dict] = {}
+
         for entry in self.state.dex:
+            for species_id in entry.chain_order:
+                slot = acc.setdefault(
+                    species_id,
+                    {"rarity": str(entry.rarity), "is_shiny": False, "graduated": False},
+                )
+                if entry.is_shiny:
+                    slot["is_shiny"] = True
+                slot["graduated"] = True
+
+        mon = self.state.active
+        if mon is not None:
+            for species_id in mon.path_ids[: mon.stage_index + 1]:
+                slot = acc.setdefault(
+                    species_id,
+                    {"rarity": str(mon.rarity), "is_shiny": False, "graduated": False},
+                )
+                if mon.is_shiny:
+                    slot["is_shiny"] = True
+
+        out = []
+        for species_id in sorted(acc):
+            slot = acc[species_id]
             sprite = ""
             if self.sprites is not None:
-                path = self.sprites.path(entry.final_id, animated=False, shiny=entry.is_shiny)
+                path = self.sprites.path(
+                    species_id, animated=False, shiny=slot["is_shiny"]
+                )
                 sprite = str(path) if path else ""
             out.append(
                 {
-                    "final_id": entry.final_id,
-                    "name": self.species_name(entry.final_id, self.state.language),
-                    "rarity": str(entry.rarity),
-                    "is_shiny": entry.is_shiny,
-                    "nature": entry.nature,
+                    "final_id": species_id,
+                    "species_id": species_id,
+                    "name": self.species_name(species_id, self.state.language),
+                    "rarity": slot["rarity"],
+                    "is_shiny": slot["is_shiny"],
+                    "is_raising": not slot["graduated"],
                     "sprite_path": sprite,
                 }
             )
-        # Dex order is by species number, matching the games.
-        return sorted(out, key=lambda d: d["final_id"])
+        return out
 
     def _chain(self, species_ids, shiny: bool) -> list[dict]:
         out = []
@@ -384,9 +420,27 @@ class CompanionStore:
         return out
 
     def rarity_counts(self) -> dict:
+        """Species counts for the Pokedex filters.
+
+        The catch log counts individuals instead — 14 catches can be 28
+        species — so the two tabs cannot share one tally.
+        """
+        counts = {"legendary": 0, "rare": 0, "uncommon": 0, "common": 0}
+        for row in self.dex_payload():
+            key = row["rarity"]
+            if key in counts:
+                counts[key] += 1
+        return counts
+
+    def catch_rarity_counts(self) -> dict:
+        """Individual counts for the catch log, including the one being raised."""
         counts = {"legendary": 0, "rare": 0, "uncommon": 0, "common": 0}
         for entry in self.state.dex:
             key = str(entry.rarity)
+            if key in counts:
+                counts[key] += 1
+        if self.state.active is not None:
+            key = str(self.state.active.rarity)
             if key in counts:
                 counts[key] += 1
         return counts

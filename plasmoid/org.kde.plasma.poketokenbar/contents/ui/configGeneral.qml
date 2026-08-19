@@ -7,11 +7,14 @@ import org.kde.plasma.plasma5support as Plasma5Support
 Kirigami.FormLayout {
     id: page
 
-    // Plasma requires cfg_ aliases for its own config store, but the daemon is
-    // the source of truth. Every control writes through poketokenctl so
-    // validation and defaults live in exactly one place.
+    // Plasma injects a cfg_<key>Default for every cfg_<key> alias, plus a
+    // `title`. Without them the whole page fails to construct and the settings
+    // dialog comes up empty — which is exactly what happened.
     property alias cfg_showTokens: showTokens.checked
+    property bool cfg_showTokensDefault: false
     property alias cfg_showCost: showCost.checked
+    property bool cfg_showCostDefault: false
+    property string title: ""
 
     property var settings: ({})
 

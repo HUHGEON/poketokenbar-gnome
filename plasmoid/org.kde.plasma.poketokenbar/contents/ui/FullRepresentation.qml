@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.plasma5support as Plasma5Support
+import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 
 PlasmaExtras.Representation {
@@ -22,6 +23,12 @@ PlasmaExtras.Representation {
     readonly property var catchLog: root.appState && root.appState.catch_log ? root.appState.catch_log : []
     readonly property var rarityCounts: root.appState && root.appState.rarity_counts
                                         ? root.appState.rarity_counts : ({})
+    readonly property var catchCounts: root.appState && root.appState.catch_counts
+                                       ? root.appState.catch_counts : ({})
+    // The Pokedex counts species, the catch log counts individuals — 14
+    // catches can be 28 species, so the filter pills cannot share a tally.
+    readonly property var activeCounts: collectionTabs.currentIndex === 1
+                                        ? catchCounts : rarityCounts
     readonly property var burn: root.appState && root.appState.burn ? root.appState.burn : ({})
     readonly property var strings: root.appState && root.appState.strings
                                    ? root.appState.strings : ({})
@@ -724,8 +731,8 @@ PlasmaExtras.Representation {
                             checkable: true
                             checked: full.rarityFilter === modelData
                             text: modelData.charAt(0).toUpperCase() + modelData.slice(1)
-                                  + " " + (full.rarityCounts[modelData] !== undefined
-                                           ? full.rarityCounts[modelData] : 0)
+                                  + " " + (full.activeCounts[modelData] !== undefined
+                                           ? full.activeCounts[modelData] : 0)
                             onClicked: {
                                 // Clicking the active filter clears it.
                                 full.rarityFilter = full.rarityFilter === modelData ? "" : modelData;
@@ -769,10 +776,35 @@ PlasmaExtras.Representation {
                                 ColumnLayout {
                                     spacing: 0
 
-                                    PlasmaComponents.Label {
-                                        text: "#" + modelData.final_id
-                                        opacity: 0.6
-                                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                    RowLayout {
+                                        spacing: 2
+
+                                        PlasmaComponents.Label {
+                                            text: "#" + modelData.final_id
+                                            opacity: 0.6
+                                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                        }
+
+                                        // Backed only by the companion being
+                                        // raised: buying an egg discards it and
+                                        // this square disappears, so it is
+                                        // marked rather than shown as permanent.
+                                        Rectangle {
+                                            visible: modelData.is_raising === true
+                                            radius: height / 2
+                                            color: Kirigami.Theme.highlightColor
+                                            implicitWidth: raisingTag.implicitWidth + 6
+                                            implicitHeight: raisingTag.implicitHeight + 2
+
+                                            PlasmaComponents.Label {
+                                                id: raisingTag
+                                                anchors.centerIn: parent
+                                                text: i18n("RAISING")
+                                                color: "white"
+                                                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                                                font.bold: true
+                                            }
+                                        }
                                     }
 
                                     Image {
@@ -789,6 +821,11 @@ PlasmaExtras.Representation {
                                               + (modelData.name ? modelData.name
                                                                 : "#" + modelData.final_id)
                                         elide: Text.ElideRight
+                                        // Not permanent yet: buying an egg
+                                        // discards the companion and this
+                                        // square disappears.
+                                        opacity: modelData.is_raising ? 0.65 : 1.0
+                                        font.italic: modelData.is_raising === true
                                         Layout.maximumWidth: Kirigami.Units.gridUnit * 4
                                     }
                                 }
@@ -973,6 +1010,17 @@ PlasmaExtras.Representation {
                 text: i18n("Refresh")
                 display: QQC2.AbstractButton.TextBesideIcon
                 onClicked: runner.run("poketokenctl refresh")
+            }
+
+            QQC2.ToolButton {
+                icon.name: "configure"
+                text: i18n("Settings")
+                display: QQC2.AbstractButton.IconOnly
+                // Same dialog as right-click > Configure, but discoverable.
+                onClicked: Plasmoid.internalAction("configure").trigger()
+
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: i18n("Settings")
             }
 
             Item { Layout.fillWidth: true }
