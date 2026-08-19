@@ -1,0 +1,207 @@
+"""Companion state and growth — ports CompanionModel/CompanionStore.swift.
+
+Pure functions over CompanionState with no I/O, so the whole game is testable
+without a network or a filesystem. Species data arrives through an injected
+line provider; persistence lives in save.py.
+"""
+
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass, field
+
+from . import balance
+from .balance import Rarity
+
+
+@dataclass(slots=True)
+class EvoLine:
+    """One evolution line: ordered species ids from base to final."""
+
+    base_id: int
+    path_ids: list[int]
+    rarity: Rarity
+    names: dict[int, dict[str, str]] = field(default_factory=dict)
+
+    @property
+    def total_forms(self) -> int:
+        return len(self.path_ids)
+
+
+@dataclass(slots=True)
+class MonState:
+    base_id: int
+    path_ids: list[int]
+    planned_path_ids: list[int]
+    stage_index: int = 0
+    used_at_stage: int = 0
+    rarity: Rarity = Rarity.COMMON
+    total_forms: int = 1
+    is_shiny: bool = False
+    nature: str | None = None
+    ditto_disguise: int | None = None
+    ditto_revealed: bool = False
+
+    @property
+    def current_id(self) -> int:
+        """Species currently displayed.
+
+        Falls back to base_id when path_ids is empty so a damaged save cannot
+        crash rendering, which happens on every frame.
+        """
+        if not self.path_ids:
+            return self.base_id
+        return self.path_ids[min(self.stage_index, len(self.path_ids) - 1)]
+
+    @property
+    def is_final_form(self) -> bool:
+        return self.stage_index >= len(self.path_ids) - 1
+
+
+@dataclass(slots=True)
+class DexEntry:
+    base_id: int
+    final_id: int
+    chain_order: list[int]
+    rarity: Rarity
+    is_shiny: bool = False
+    nature: str | None = None
+
+
+@dataclass(slots=True)
+class CompanionState:
+    # Tokens are only counted from install onward.
+    install_baseline_set: bool = False
+    used_since_install: int = 0
+    # Ledger of tokens spent in the shop. Spendable = used_since_install
+    # - spent_tokens. The growth meter (used_since_install) never rewinds.
+    spent_tokens: int = 0
+    # Tokens absorbed by the current egg; resets per egg.
+    egg_usage: int = 0
+    # Rarity floor a premium egg guarantees. Persisted because the species roll
+    # needs the network, which may be unavailable at purchase time.
+    egg_tier: Rarity | None = None
+    pending_hatch_id: int | None = None
+    claimed_today_tokens_by_provider: dict[str, int] | None = None
+    last_date: str = ""
+    active: MonState | None = None
+    dex: list[DexEntry] = field(default_factory=list)
+    collected_finals: set[str] = field(default_factory=set)
+    language: str = "en"
+    inventory: dict[str, int] = field(default_factory=dict)
+    candy_grant_tier: dict[str, int] = field(default_factory=dict)
+    candy_feature_seeded: bool = False
+
+    @property
+    def spendable_tokens(self) -> int:
+        return max(0, self.used_since_install - self.spent_tokens)
+
+
+@dataclass(slots=True)
+class GrowthEvents:
+    """What happened during one apply_usage call, for notifications."""
+
+    hatched: int | None = None
+    evolved_to: int | None = None
+    graduated: DexEntry | None = None
+
+
+def roll_shiny(rng: random.Random, has_charm: bool) -> bool:
+    denominator = (
+        balance.SHINY_CHARM_DENOMINATOR if has_charm else balance.SHINY_DENOMINATOR
+    )
+    return rng.randrange(denominator) == 0
+
+
+def roll_nature(rng: random.Random) -> str:
+    return rng.choice(balance.NATURES)
+
+
+def hatch(state: CompanionState, line: EvoLine, rng: random.Random) -> MonState:
+    """Turn the egg into a companion. Shiny and nature are fixed here."""
+    has_charm = state.inventory.get("shinyCharm", 0) > 0
+    mon = MonState(
+        base_id=line.base_id,
+        path_ids=list(line.path_ids),
+        planned_path_ids=list(line.path_ids),
+        stage_index=0,
+        used_at_stage=0,
+        rarity=line.rarity,
+        total_forms=line.total_forms,
+        is_shiny=roll_shiny(rng, has_charm),
+        nature=roll_nature(rng),
+    )
+    state.active = mon
+    # The guarantee is consumed by the hatch it paid for.
+    state.egg_tier = None
+    state.pending_hatch_id = None
+    state.egg_usage = 0
+    return mon
+
+
+def graduate(state: CompanionState, mon: MonState) -> DexEntry:
+    """Archive a completed companion and clear the slot for a fresh egg."""
+    entry = DexEntry(
+        base_id=mon.base_id,
+        final_id=mon.current_id,
+        chain_order=list(mon.path_ids),
+        rarity=mon.rarity,
+        is_shiny=mon.is_shiny,
+        nature=mon.nature,
+    )
+    state.dex.append(entry)
+    state.collected_finals.add(f"{mon.base_id}-{mon.current_id}")
+    state.active = None
+    state.egg_usage = 0
+    return entry
+
+
+def apply_usage(
+    state: CompanionState,
+    tokens: int,
+    line_for_egg=None,
+    rng: random.Random | None = None,
+) -> GrowthEvents:
+    """Feed tokens to the companion.
+
+    Overflow always carries forward, so a single large delta can hatch and then
+    immediately advance a stage rather than being clipped.
+    """
+    events = GrowthEvents()
+    if tokens <= 0:
+        return events
+    rng = rng or random.Random()
+
+    state.used_since_install += tokens
+
+    # --- egg ---
+    if state.active is None:
+        state.egg_usage += tokens
+        if state.egg_usage < balance.EGG_HATCH_THRESHOLD:
+            return events
+        if line_for_egg is None:
+            # No species data (offline). Hold the tokens in the egg and hatch
+            # once a line is available — never discard progress.
+            return events
+        overflow = state.egg_usage - balance.EGG_HATCH_THRESHOLD
+        mon = hatch(state, line_for_egg, rng)
+        events.hatched = mon.current_id
+        tokens = overflow
+        if tokens <= 0:
+            return events
+
+    # --- growth ---
+    mon = state.active
+    mon.used_at_stage += tokens
+    while True:
+        threshold = balance.phase_threshold(mon.rarity, mon.total_forms, mon.stage_index)
+        if mon.used_at_stage < threshold:
+            break
+        mon.used_at_stage -= threshold
+        if mon.is_final_form:
+            events.graduated = graduate(state, mon)
+            break
+        mon.stage_index += 1
+        events.evolved_to = mon.current_id
+
+    return events
