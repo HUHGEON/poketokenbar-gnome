@@ -202,7 +202,35 @@ class ClaudeProvider:
         )
         return daily
 
+    def fetch_periods(self, today: str | None = None) -> dict:
+        """Week-to-date and month-to-date totals.
+
+        The week starts Monday, matching the Swift period grouping.
+        """
+        from datetime import datetime, timedelta
+
+        day = today or _date.today().strftime("%Y-%m-%d")
+        anchor = datetime.strptime(day, "%Y-%m-%d").date()
+        week_start = anchor - timedelta(days=anchor.weekday())
+        month_prefix = day[:7]
+
+        week = {"tokens": 0, "cost": 0.0}
+        month = {"tokens": 0, "cost": 0.0}
+        for e in self.scan_entries():
+            cost = pricing.cost(e.model, e.input, e.output, e.cache_write, e.cache_read)
+            if e.local_day[:7] == month_prefix:
+                month["tokens"] += e.total
+                month["cost"] += cost
+            try:
+                entry_day = datetime.strptime(e.local_day, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if week_start <= entry_day <= anchor:
+                week["tokens"] += e.total
+                week["cost"] += cost
+        return {"week": week, "month": month}
+
     def fetch_enrichment(self) -> ProviderEnrichment:
-        # Blocks and period totals arrive in Plan 2; a bare result keeps the
-        # *_ok flags false so callers retain previous values.
+        # Blocks/burn-rate remain unported; the *_ok flags stay false so callers
+        # keep their previous values rather than zeroing.
         return ProviderEnrichment()

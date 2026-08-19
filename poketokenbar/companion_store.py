@@ -17,6 +17,17 @@ from .companion import CompanionState
 from .format import compact as _compact
 
 
+def _duration(seconds: float | None) -> str:
+    if not seconds or seconds <= 0:
+        return ""
+    days = int(seconds // 86400)
+    hours = int((seconds % 86400) // 3600)
+    if days > 0:
+        return f"{days} days, {hours} hr"
+    minutes = int((seconds % 3600) // 60)
+    return f"{hours} hr, {minutes} min" if hours else f"{minutes} min"
+
+
 class CompanionStore:
     def __init__(
         self,
@@ -121,8 +132,9 @@ class CompanionStore:
         path = self.sprites.path(mon.current_id, animated=True, shiny=mon.is_shiny)
         return str(path) if path else ""
 
-    def payload(self) -> dict:
+    def payload(self, today_tokens: int = 0, limit_warning: bool = False) -> dict:
         """Companion section of state.json."""
+        kind = companion.display_state(self.state, today_tokens, limit_warning)
         mon = self.state.active
         if mon is None:
             progress = min(1.0, self.state.egg_usage / balance.EGG_HATCH_THRESHOLD)
@@ -135,14 +147,37 @@ class CompanionStore:
                 "sprite_path": "",
                 "dex_count": len(self.state.dex),
                 "spendable_tokens": self.state.spendable_tokens,
+                "spendable_text": _compact(self.state.spendable_tokens),
+                "display_state": kind,
+                "status_message": companion.STATUS_MESSAGE.get(kind, ""),
             }
 
         threshold = balance.phase_threshold(mon.rarity, mon.total_forms, mon.stage_index)
+        # Remaining to the NEXT step: an evolution mid-line, graduation at the end.
+        remaining = max(0, threshold - mon.used_at_stage)
+        evo_line = []
+        if self.sprites is not None:
+            for index, species_id in enumerate(mon.path_ids):
+                path = self.sprites.path(species_id, animated=False, shiny=mon.is_shiny)
+                evo_line.append(
+                    {
+                        "species_id": species_id,
+                        "name": self.species_name(species_id, self.state.language),
+                        "sprite_path": str(path) if path else "",
+                        "current": index == mon.stage_index,
+                        "reached": index <= mon.stage_index,
+                    }
+                )
         return {
             "stage": "mon",
             "label": "",
             "species_id": mon.current_id,
             "name": self.species_name(mon.current_id, self.state.language),
+            "is_final_form": mon.is_final_form,
+            "remaining_tokens": remaining,
+            "remaining_text": _compact(remaining),
+            "goal": "graduation" if mon.is_final_form else "next evolution",
+            "evo_line": evo_line,
             "is_shiny": mon.is_shiny,
             "nature": mon.nature,
             "rarity": str(mon.rarity),
@@ -156,6 +191,9 @@ class CompanionStore:
             "sprite_path": self.sprite_path(),
             "dex_count": len(self.state.dex),
             "spendable_tokens": self.state.spendable_tokens,
+            "spendable_text": _compact(self.state.spendable_tokens),
+            "display_state": kind,
+            "status_message": companion.STATUS_MESSAGE.get(kind, ""),
         }
 
     # --- economy -----------------------------------------------------------
@@ -175,28 +213,54 @@ class CompanionStore:
         self._persist()
         return message
 
+    def _item_sprite(self, key: str) -> str:
+        name = balance.ITEM_SPRITE.get(key)
+        if not name or self.sprites is None:
+            return ""
+        path = self.sprites.item_path(name)
+        return str(path) if path else ""
+
     def shop_payload(self) -> list[dict]:
         spendable = self.state.spendable_tokens
-        return [
-            {
-                "key": e.key,
-                "kind": e.kind,
-                "price": e.price,
-                "price_text": _compact(e.price),
-                "label": e.label,
-                "owned": e.owned,
-                "affordable": spendable >= e.price and not e.owned,
-            }
-            for e in shop.entries(self.state)
-        ]
+        out = []
+        for e in shop.entries(self.state):
+            if e.kind == "item":
+                sprite = self._item_sprite(e.key)
+                description = balance.ITEM_DESCRIPTION.get(e.key, "")
+                badge = ""
+            else:
+                sprite = self._item_sprite("egg")
+                tier = e.key.split(":")[1] if ":" in e.key else None
+                description = balance.EGG_DESCRIPTION.get(tier, "")
+                badge = (tier or "").upper()
+            out.append(
+                {
+                    "key": e.key,
+                    "kind": e.kind,
+                    "price": e.price,
+                    "price_text": _compact(e.price),
+                    "label": e.label,
+                    "description": description,
+                    "badge": badge,
+                    "sprite_path": sprite,
+                    "emoji": {"rareCandy": "\N{CANDY}", "mint": "\N{HERB}",
+                              "shinyCharm": "\N{SPARKLES}"}.get(e.key, "\N{EGG}"),
+                    "owned": e.owned,
+                    "owned_count": self.state.inventory.get(e.key, 0),
+                    "affordable": spendable >= e.price and not e.owned,
+                }
+            )
+        return out
 
     def bag_payload(self) -> list[dict]:
-        labels = {"rareCandy": "Rare Candy", "mint": "Mint", "shinyCharm": "Shiny Charm"}
         emoji = {"rareCandy": "\N{CANDY}", "mint": "\N{HERB}", "shinyCharm": "\N{SPARKLES}"}
         return [
             {
                 "key": key,
-                "label": labels.get(key, key),
+                "label": balance.ITEM_LABEL.get(key, key),
+                "description": balance.ITEM_DESCRIPTION.get(key, ""),
+                "effect": balance.ITEM_EFFECT.get(key, ""),
+                "sprite_path": self._item_sprite(key),
                 "emoji": emoji.get(key, "?"),
                 "count": count,
                 # Passive items are held, not consumed.
@@ -226,6 +290,67 @@ class CompanionStore:
             )
         # Dex order is by species number, matching the games.
         return sorted(out, key=lambda d: d["final_id"])
+
+    def _chain(self, species_ids, shiny: bool) -> list[dict]:
+        out = []
+        for species_id in species_ids:
+            sprite = ""
+            if self.sprites is not None:
+                path = self.sprites.path(species_id, animated=False, shiny=shiny)
+                sprite = str(path) if path else ""
+            out.append(
+                {
+                    "species_id": species_id,
+                    "name": self.species_name(species_id, self.state.language),
+                    "sprite_path": sprite,
+                }
+            )
+        return out
+
+    def catch_log_payload(self) -> list[dict]:
+        """Every catch, newest first, with its full evolution chain.
+
+        Entries predating caught_at sort last rather than pretending to be
+        ancient; ordering among them is unspecified.
+        """
+        out = [
+            {
+                "rarity": str(e.rarity),
+                "nature": e.nature,
+                "is_shiny": e.is_shiny,
+                "chain": self._chain(e.chain_order, e.is_shiny),
+                "caught_at": e.caught_at,
+                "raised_text": _duration(e.raised_seconds),
+                "raising": False,
+            }
+            for e in self.state.dex
+        ]
+        out.sort(key=lambda d: d["caught_at"] or 0, reverse=True)
+
+        # The companion still being raised leads the log, as in the macOS app.
+        mon = self.state.active
+        if mon is not None:
+            out.insert(
+                0,
+                {
+                    "rarity": str(mon.rarity),
+                    "nature": mon.nature,
+                    "is_shiny": mon.is_shiny,
+                    "chain": self._chain(mon.path_ids[: mon.stage_index + 1], mon.is_shiny),
+                    "caught_at": mon.hatched_at,
+                    "raised_text": "",
+                    "raising": True,
+                },
+            )
+        return out
+
+    def rarity_counts(self) -> dict:
+        counts = {"legendary": 0, "rare": 0, "uncommon": 0, "common": 0}
+        for entry in self.state.dex:
+            key = str(entry.rarity)
+            if key in counts:
+                counts[key] += 1
+        return counts
 
     def _persist(self) -> None:
         save.save(self.state, self.save_path)

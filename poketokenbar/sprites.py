@@ -13,6 +13,7 @@ import urllib.request
 from pathlib import Path
 
 SPRITE_BASE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon"
+ITEM_BASE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items"
 USER_AGENT = "poketokenbar/0.1"
 # Animated Black/White sprites exist for Gen I-V only.
 MAX_ANIMATED_ID = 649
@@ -37,6 +38,27 @@ class SpriteStore:
         base = cache_dir or (Path.home() / ".cache" / "poketokenbar")
         self.dir = base / "sprites"
         self.dir.mkdir(parents=True, exist_ok=True)
+
+    def item_path(self, item_name: str) -> Path | None:
+        """Local path to an item sprite, or None when PokeAPI has none."""
+        target = self.dir / f"item-{item_name}.png"
+        if target.is_file() and target.stat().st_size > 0:
+            return target
+        request = urllib.request.Request(f"{ITEM_BASE}/{item_name}.png")
+        request.add_header("User-Agent", USER_AGENT)
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                if response.status != 200:
+                    return None
+                data = response.read()
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return None
+        if not data:
+            return None
+        tmp = target.with_suffix(".png.tmp")
+        tmp.write_bytes(data)
+        tmp.replace(target)
+        return target
 
     def path(self, species_id: int, animated: bool = True, shiny: bool = False) -> Path | None:
         """Local path to the sprite, downloading it once if needed.

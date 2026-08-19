@@ -41,6 +41,7 @@ class MonState:
     nature: str | None = None
     ditto_disguise: int | None = None
     ditto_revealed: bool = False
+    hatched_at: float | None = None
 
     @property
     def current_id(self) -> int:
@@ -66,6 +67,10 @@ class DexEntry:
     rarity: Rarity
     is_shiny: bool = False
     nature: str | None = None
+    # Epoch seconds. None on entries written before this was tracked; those
+    # sort last rather than pretending to be ancient.
+    caught_at: float | None = None
+    raised_seconds: float | None = None
 
 
 @dataclass(slots=True)
@@ -106,6 +111,44 @@ class GrowthEvents:
     graduated: DexEntry | None = None
 
 
+def display_state(
+    state: CompanionState,
+    today_tokens: int,
+    limit_warning: bool = False,
+    just_evolved: bool = False,
+) -> str:
+    """Which mood the companion is in — ports computeState().
+
+    Order matters: a level-up beats a limit warning, which beats sleep. Any
+    other ordering hides the celebration behind a warning.
+    """
+    if state.active is None:
+        return "egg"
+    if just_evolved:
+        return "levelUp"
+    if limit_warning:
+        return "tired"
+    if today_tokens <= 0:
+        return "sleep"
+    # Burn tiers, in tokens/day equivalents.
+    if today_tokens >= 150_000_000:
+        return "focus"
+    if today_tokens >= 20_000_000:
+        return "working"
+    return "idle"
+
+
+STATUS_MESSAGE = {
+    "egg": "An egg is warming up.",
+    "idle": "Keeping quiet today.",
+    "working": "Today's work is piling up.",
+    "focus": "In focus mode now.",
+    "tired": "Careful — the limit is close.",
+    "sleep": "Sleeping now.",
+    "levelUp": "It grew!",
+}
+
+
 def roll_shiny(rng: random.Random, has_charm: bool) -> bool:
     denominator = (
         balance.SHINY_CHARM_DENOMINATOR if has_charm else balance.SHINY_DENOMINATOR
@@ -130,6 +173,7 @@ def hatch(state: CompanionState, line: EvoLine, rng: random.Random) -> MonState:
         total_forms=line.total_forms,
         is_shiny=roll_shiny(rng, has_charm),
         nature=roll_nature(rng),
+        hatched_at=__import__("time").time(),
     )
     state.active = mon
     # The guarantee is consumed by the hatch it paid for.
@@ -139,8 +183,11 @@ def hatch(state: CompanionState, line: EvoLine, rng: random.Random) -> MonState:
     return mon
 
 
-def graduate(state: CompanionState, mon: MonState) -> DexEntry:
+def graduate(state: CompanionState, mon: MonState, now: float | None = None) -> DexEntry:
     """Archive a completed companion and clear the slot for a fresh egg."""
+    import time as _time
+
+    now = _time.time() if now is None else now
     entry = DexEntry(
         base_id=mon.base_id,
         final_id=mon.current_id,
@@ -148,6 +195,8 @@ def graduate(state: CompanionState, mon: MonState) -> DexEntry:
         rarity=mon.rarity,
         is_shiny=mon.is_shiny,
         nature=mon.nature,
+        caught_at=now,
+        raised_seconds=(now - mon.hatched_at) if mon.hatched_at else None,
     )
     state.dex.append(entry)
     state.collected_finals.add(f"{mon.base_id}-{mon.current_id}")

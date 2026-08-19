@@ -110,6 +110,38 @@ SHINY_DENOMINATOR = 64
 DITTO_DISGUISE_DENOMINATOR = 128
 DITTO_SPECIES_ID = 132
 
+# PokeAPI item sprite names; None means no sprite exists and the UI falls back
+# to an emoji. Mint is a Gen-VIII item PokeAPI has no sprite for.
+ITEM_SPRITE = {
+    "rareCandy": "rare-candy",
+    "mint": None,
+    "shinyCharm": "shiny-charm",
+}
+
+ITEM_LABEL = {
+    "rareCandy": "Rare Candy",
+    "mint": "Mint",
+    "shinyCharm": "Shiny Charm",
+}
+
+ITEM_DESCRIPTION = {
+    "rareCandy": "Raises your Pokemon's EXP by 100M.",
+    "mint": "Randomly changes your Pokemon's nature.",
+    "shinyCharm": "While owned, raises the chance of hatching a shiny.",
+}
+
+ITEM_EFFECT = {
+    "rareCandy": "+100M XP",
+    "mint": "Random nature",
+    "shinyCharm": "Shiny rate up - active",
+}
+
+EGG_DESCRIPTION = {
+    None: "Send off your current Pokemon and start fresh with a new egg.",
+    "uncommon": "Send off your current Pokemon for an egg guaranteed to hatch Uncommon or better.",
+    "rare": "Send off your current Pokemon for an egg guaranteed to hatch Rare or better.",
+}
+
 NATURES = [
     "hardy", "lonely", "brave", "adamant", "naughty",
     "bold", "docile", "relaxed", "impish", "lax",

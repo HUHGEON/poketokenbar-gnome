@@ -55,6 +55,9 @@ def build(
     shop_payload: list | None = None,
     bag_payload: list | None = None,
     dex_payload: list | None = None,
+    catch_log: list | None = None,
+    rarity_counts: dict | None = None,
+    periods: dict | None = None,
 ) -> dict:
     total_tokens = sum(d.total_tokens for d in daily_by_provider.values())
     total_cost = sum(d.total_cost for d in daily_by_provider.values())
@@ -69,6 +72,7 @@ def build(
             "total_tokens": total_tokens,
             "total_cost": total_cost,
             "tokens_grouped": fmt.grouped(total_tokens),
+            "tokens_compact": fmt.compact(total_tokens),
             "cost_text": fmt.cost(total_cost),
         },
         "providers": {
@@ -91,6 +95,9 @@ def build(
         "shop": shop_payload or [],
         "bag": bag_payload or [],
         "dex": dex_payload or [],
+        "catch_log": catch_log or [],
+        "rarity_counts": rarity_counts or {},
+        "periods": periods or {},
         "panel": {
             "tokens_text": fmt.compact(total_tokens)
             if config_values.get("show_tokens_in_menu")

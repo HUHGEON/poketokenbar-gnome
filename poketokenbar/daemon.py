@@ -36,7 +36,11 @@ class Daemon:
         errors: list[str] = []
         for command in commands.drain(spool=self.spool):
             name = command.get("name")
-            if name == "reload_config":
+            if name == "refresh":
+                # Manual refresh: drop cached limits so the next fetch is live.
+                if self.limits_source is not None:
+                    self.limits_source.invalidate()
+            elif name == "reload_config":
                 self.config_values = config.load(self.config_path)
             elif name in ("buy", "use") and self.companion_store is not None:
                 key = (command.get("args") or {}).get("key", "")
@@ -60,6 +64,21 @@ class Daemon:
             if daily is not None:
                 daily_by_provider[provider.id] = daily
 
+        periods: dict = {}
+        for provider in self.providers:
+            fetch_periods = getattr(provider, "fetch_periods", None)
+            if fetch_periods is None:
+                continue
+            try:
+                result = fetch_periods()
+            except Exception as exc:
+                errors.append(f"{provider.id} periods: {exc}")
+                continue
+            for key in ("week", "month"):
+                bucket = periods.setdefault(key, {"tokens": 0, "cost": 0.0})
+                bucket["tokens"] += result[key]["tokens"]
+                bucket["cost"] += result[key]["cost"]
+
         limit_status = None
         if self.limits_source is not None:
             # Best effort: limits failing hides that section but must never
@@ -74,7 +93,14 @@ class Daemon:
                 self.companion_store.update(
                     {pid: d.total_tokens for pid, d in daily_by_provider.items()}
                 )
-                companion_payload = self.companion_store.payload()
+                today_total = sum(x.total_tokens for x in daily_by_provider.values())
+                warn = float(self.config_values.get("warn_threshold", 80))
+                limit_warning = False
+                if limit_status is not None and limit_status.session is not None:
+                    limit_warning = limit_status.session.utilization >= warn
+                companion_payload = self.companion_store.payload(
+                    today_tokens=today_total, limit_warning=limit_warning
+                )
                 # Candy and notifications ride on fresh limits.
                 if limit_status is not None:
                     windows = {}
@@ -112,6 +138,9 @@ class Daemon:
             shop_payload=self.companion_store.shop_payload() if self.companion_store else None,
             bag_payload=self.companion_store.bag_payload() if self.companion_store else None,
             dex_payload=self.companion_store.dex_payload() if self.companion_store else None,
+            catch_log=self.companion_store.catch_log_payload() if self.companion_store else None,
+            rarity_counts=self.companion_store.rarity_counts() if self.companion_store else None,
+            periods=periods,
         )
         state.write(self.state_path, payload)
         return payload

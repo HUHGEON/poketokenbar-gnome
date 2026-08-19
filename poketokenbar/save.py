@@ -81,6 +81,7 @@ def _decode_mon(raw) -> MonState | None:
         if isinstance(raw.get("ditto_disguise"), int)
         else None,
         ditto_revealed=_lenient(raw, "ditto_revealed", bool, False),
+        hatched_at=raw.get("hatched_at") if isinstance(raw.get("hatched_at"), (int, float)) else None,
     )
 
 
@@ -101,6 +102,10 @@ def _decode_dex_entry(raw) -> DexEntry | None:
         rarity=_rarity(raw.get("rarity")),
         is_shiny=_lenient(raw, "is_shiny", bool, False),
         nature=raw.get("nature") if isinstance(raw.get("nature"), str) else None,
+        caught_at=raw.get("caught_at") if isinstance(raw.get("caught_at"), (int, float)) else None,
+        raised_seconds=raw.get("raised_seconds")
+        if isinstance(raw.get("raised_seconds"), (int, float))
+        else None,
     )
 
 
@@ -158,6 +163,7 @@ def encode(state: CompanionState) -> dict:
             "nature": m.nature,
             "ditto_disguise": m.ditto_disguise,
             "ditto_revealed": m.ditto_revealed,
+            "hatched_at": m.hatched_at,
         }
 
     return {
@@ -178,6 +184,8 @@ def encode(state: CompanionState) -> dict:
                 "rarity": str(d.rarity),
                 "is_shiny": d.is_shiny,
                 "nature": d.nature,
+                "caught_at": d.caught_at,
+                "raised_seconds": d.raised_seconds,
             }
             for d in state.dex
         ],

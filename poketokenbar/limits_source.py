@@ -39,6 +39,15 @@ class LimitsSource:
         self._blocked_until: float = 0.0
         self.last_error: str = ""
 
+    def invalidate(self) -> None:
+        """Force the next get() to refetch — used by a manual refresh.
+
+        Clears the backoff too: a person pressing refresh is an explicit
+        request, not the poll loop hammering a rate limit.
+        """
+        self._fetched_at = None
+        self._blocked_until = 0.0
+
     def get(self) -> limits.LimitStatus | None:
         now = self._clock()
 
