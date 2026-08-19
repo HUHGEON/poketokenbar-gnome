@@ -71,6 +71,10 @@ def build(
         "providers": {
             pid: {
                 "total_tokens": d.total_tokens,
+                # Preformatted: QML's Number.toLocaleString() renders large
+                # values as 8.55336e+07. Formatting belongs in one place.
+                "total_tokens_text": fmt.grouped(d.total_tokens),
+                "total_tokens_compact": fmt.compact(d.total_tokens),
                 "total_cost": d.total_cost,
                 "input_tokens": d.input_tokens,
                 "output_tokens": d.output_tokens,

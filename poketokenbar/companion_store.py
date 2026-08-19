@@ -104,6 +104,7 @@ class CompanionStore:
             progress = min(1.0, self.state.egg_usage / balance.EGG_HATCH_THRESHOLD)
             return {
                 "stage": "egg",
+                "label": f"\N{EGG}{round(progress * 100)}%",
                 "egg_usage": self.state.egg_usage,
                 "egg_progress": round(progress, 4),
                 "egg_tier": str(self.state.egg_tier) if self.state.egg_tier else None,
@@ -115,6 +116,7 @@ class CompanionStore:
         threshold = balance.phase_threshold(mon.rarity, mon.total_forms, mon.stage_index)
         return {
             "stage": "mon",
+            "label": "",
             "species_id": mon.current_id,
             "is_shiny": mon.is_shiny,
             "nature": mon.nature,
