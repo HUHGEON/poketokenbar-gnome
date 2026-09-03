@@ -28,54 +28,65 @@ def expand(raw: str) -> list[Path]:
     Tilde is expanded and each path segment may glob. Entries point at the log
     root itself, with no suffix appended. A pattern matching nothing is not an
     error: it can legitimately be registered before the tool that fills it runs.
+
+    Walked through `Path.parts` rather than by splitting on "/". An earlier
+    version tested for an absolute path with `startswith("/")` and split on the
+    same character, which rejected every Windows path outright — the whole
+    setting silently did nothing there, and a real Windows runner is what caught
+    it. `Path` knows both separators and both shapes of root.
     """
     out: list[Path] = []
     for part in _SPLIT.split(raw or ""):
         pattern = part.strip()
         if not pattern:
             continue
-        absolute = os.path.expanduser(pattern)
+        candidate = Path(os.path.expanduser(pattern))
         # Relative patterns are refused rather than resolved against whatever
         # directory the daemon happens to have been started in.
-        if not absolute.startswith("/"):
+        if not candidate.is_absolute():
             continue
 
-        bases = [""]
-        for segment in absolute.split("/"):
-            if not segment:
-                continue
+        segments = candidate.parts
+        bases = [Path(segments[0])]  # "/" on POSIX, "C:\\" on Windows
+        for segment in segments[1:]:
             if _GLOB.search(segment):
-                matched: list[str] = []
+                matched: list[Path] = []
                 for base in bases:
                     try:
-                        names = sorted(os.listdir(base or "/"))
+                        names = sorted(entry.name for entry in base.iterdir())
                     except OSError:
                         continue
+                    # `fnmatch`, not `fnmatchcase`: it normalises case the way
+                    # the platform does, which is what a user typing a pattern
+                    # into a Windows path expects. On POSIX the two are the same.
                     matched.extend(
-                        f"{base}/{name}"
-                        for name in names
-                        if fnmatch.fnmatchcase(name, segment)
+                        base / name for name in names if fnmatch.fnmatch(name, segment)
                     )
                 bases = matched
             else:
-                bases = [f"{base}/{segment}" for base in bases]
-        if bases == [""]:
-            bases = ["/"]
-        out.extend(Path(p) for p in bases if os.path.isdir(p))
+                bases = [base / segment for base in bases]
+        out.extend(base for base in bases if base.is_dir())
     return out
 
 
 def _normalized(path: Path) -> str:
-    """Symlinks resolved and case folded, for comparing two roots.
+    """Symlinks resolved, case folded, and separators made uniform.
 
     `~/.config/claude` being a link to `~/.claude` is a common XDG setup, and
     comparing the literal paths would scan that tree twice.
+
+    The separator matters as much as the case. Every nesting test below is a
+    string prefix check, and they were written against "/" — on Windows, where
+    a resolved path comes back with backslashes, that made both of them answer
+    "not nested" for everything. Nested roots would have doubled the scan, and
+    worse, the guard that stops an extra folder swallowing a curated default
+    would never have fired.
     """
     try:
         resolved = path.resolve()
     except OSError:
         resolved = path
-    return str(resolved).lower()
+    return resolved.as_posix().lower()
 
 
 def fold(roots: list[Path]) -> list[Path]:
@@ -95,7 +106,9 @@ def fold(roots: list[Path]) -> list[Path]:
     kept: list[str] = []
     # Shortest first, so a parent settles before its children are considered.
     for key, _root in sorted(unique, key=lambda pair: len(pair[0])):
-        if not any(key == k or key.startswith(k + "/") for k in kept):
+        stem = key.rstrip("/")
+        if not any(stem == k.rstrip("/") or stem.startswith(k.rstrip("/") + "/")
+                   for k in kept):
             kept.append(key)
     return [root for key, root in unique if key in kept]
 
@@ -107,11 +120,13 @@ def _would_evict(extra: Path, protected: list[Path]) -> bool:
     then never descended into the dotted directories underneath, so the usage
     silently read as zero. An extra that swallows a default is dropped instead.
     """
-    key = _normalized(extra)
+    key = _normalized(extra).rstrip("/")
     for default in protected:
-        other = _normalized(default)
-        if key == "/":
-            if other != key:
+        other = _normalized(default).rstrip("/")
+        # A filesystem root swallows everything. Written as "is there anything
+        # left" rather than a literal "/", because a Windows root is "c:".
+        if not key:
+            if other:
                 return True
         elif other != key and other.startswith(key + "/"):
             return True

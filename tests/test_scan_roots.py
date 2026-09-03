@@ -184,3 +184,41 @@ def test_every_provider_honours_an_extra_folder(cls, tmp_path):
     elsewhere.mkdir()
     provider = cls(home=tmp_path, custom_roots=lambda _id: str(elsewhere))
     assert elsewhere in provider.roots()
+
+
+# MARK: Windows path shapes
+#
+# Every nesting test here is a string prefix check, and they were written
+# against "/". A real Windows runner is what showed that: `expand` rejected
+# every C:\ path as relative, so the whole setting silently did nothing.
+
+
+def test_a_windows_style_absolute_path_is_accepted(tmp_path):
+    """`startswith("/")` said every Windows path was relative."""
+    from pathlib import PureWindowsPath
+
+    assert PureWindowsPath("C:/Users/u/logs").is_absolute()
+    # The real check, run on whatever platform this is: an absolute path made
+    # from this machine's own root is never refused.
+    (tmp_path / "logs").mkdir()
+    assert scan_roots.expand(str(tmp_path / "logs")) == [tmp_path / "logs"]
+
+
+def test_nesting_is_detected_whatever_the_separator(tmp_path):
+    """Folding compares normalised strings, so the separator has to be uniform
+    or a nested root reads as unrelated and gets scanned twice."""
+    (tmp_path / "root" / "child").mkdir(parents=True)
+    folded = scan_roots.fold([tmp_path / "root", tmp_path / "root" / "child"])
+    assert folded == [tmp_path / "root"]
+    normalised = scan_roots._normalized(tmp_path / "root")
+    assert "\\" not in normalised, "separators must be normalised before comparing"
+    assert normalised == normalised.lower()
+
+
+def test_the_eviction_guard_survives_a_trailing_separator(tmp_path):
+    """A root resolves with a trailing separator on some platforms, and the
+    prefix check would then never match."""
+    default = tmp_path / ".claude" / "projects"
+    default.mkdir(parents=True)
+    assert scan_roots._would_evict(tmp_path, [default])
+    assert scan_roots.union([default], str(tmp_path)) == [default]
