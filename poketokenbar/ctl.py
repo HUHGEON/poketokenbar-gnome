@@ -10,8 +10,8 @@ from . import commands, config
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv:
-        print("usage: poketokenctl {set <key> <value>|refresh|buy <key>|use <key>|"
-              "export <path>|import <path>}",
+        print("usage: poketokenctl {set <key> <value>|scan-roots <provider> <paths>|"
+              "refresh|buy <key>|use <key>|export <path>|import <path>}",
               file=sys.stderr)
         return 2
 
@@ -23,6 +23,19 @@ def main(argv: list[str] | None = None) -> int:
         try:
             config.set_value(config.default_path(), rest[0], rest[1])
         except (KeyError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        commands.enqueue("reload_config", {})
+        return 0
+
+    if action == "scan-roots":
+        if len(rest) != 2:
+            print("usage: poketokenctl scan-roots <provider> <comma-separated paths>",
+                  file=sys.stderr)
+            return 2
+        try:
+            config.set_scan_roots(config.default_path(), rest[0], rest[1])
+        except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
         commands.enqueue("reload_config", {})

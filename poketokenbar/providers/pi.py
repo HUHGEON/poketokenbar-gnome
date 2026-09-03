@@ -248,8 +248,8 @@ class PiProvider(ScanningProvider):
     reports_cost = True
     PARSER_VERSION = 1
 
-    def roots(self) -> list[Path]:
-        return self.existing_roots(pi_session_roots(self._home))
+    def curated_roots(self) -> list[Path]:
+        return pi_session_roots(self._home)
 
     def parse_file(self, path: Path) -> list[Entry]:
         return _parse(
@@ -269,8 +269,8 @@ class OmpProvider(ScanningProvider):
     reports_cost = True
     PARSER_VERSION = 1
 
-    def roots(self) -> list[Path]:
-        return self.existing_roots(omp_session_roots(self._home))
+    def curated_roots(self) -> list[Path]:
+        return omp_session_roots(self._home)
 
     def files(self, path: Path):
         for candidate in super().files(path):

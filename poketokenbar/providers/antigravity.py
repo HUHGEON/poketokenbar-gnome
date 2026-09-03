@@ -305,8 +305,8 @@ class AntigravityProvider(SQLiteProvider):
     reports_cost = False
     PARSER_VERSION = 1
 
-    def roots(self) -> list[Path]:
-        return self.existing_roots(roots(self._home))
+    def curated_roots(self) -> list[Path]:
+        return roots(self._home)
 
     def databases(self, root: Path) -> list[Path]:
         if root.is_file():

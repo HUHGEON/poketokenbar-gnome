@@ -114,7 +114,7 @@ class ClaudeProvider(ScanningProvider):
     # Bump when parse_line changes shape, to invalidate cached blobs.
     PARSER_VERSION = 1
 
-    def roots(self) -> list[Path]:
+    def curated_roots(self) -> list[Path]:
         return project_roots(home=self._home)
 
     def parse_file(self, path: Path) -> list[Entry]:

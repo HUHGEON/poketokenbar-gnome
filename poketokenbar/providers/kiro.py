@@ -439,10 +439,8 @@ class KiroProvider(SQLiteProvider):
     PARSER_VERSION = 1
     database_names = ("data.sqlite3",)
 
-    def roots(self) -> list[Path]:
-        return self.existing_roots(
-            sqlite_roots(self._home) + session_roots(self._home)
-        )
+    def curated_roots(self) -> list[Path]:
+        return sqlite_roots(self._home) + session_roots(self._home)
 
     def files(self, root: Path) -> Iterator[Path]:
         if root.is_file():

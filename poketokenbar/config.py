@@ -26,6 +26,11 @@ DEFAULTS: dict[str, object] = {
     "floating_pet_size": 96,
     "floating_pet_bubble_alerts": True,
     "language": "en",
+    # Extra scan folders, one raw string per provider id (comma/newline
+    # separated). A dict rather than one field per provider: the readers are
+    # per-provider on purpose, so a folder added for Gemini is never handed to
+    # Claude's parser.
+    "custom_scan_roots": {},
 }
 
 
@@ -74,4 +79,27 @@ def set_value(path: Path, key: str, raw: str) -> None:
         raise KeyError(f"unknown setting: {key}")
     values = load(path)
     values[key] = _coerce(key, raw)
+    save(path, values)
+
+
+def set_scan_roots(path: Path, provider_id: str, raw: str) -> None:
+    """Store one provider's extra scan folders.
+
+    Kept out of `set_value`, which coerces to the type of a scalar default —
+    this key is a mapping, and routing it through there would either flatten the
+    other providers' entries or reject the write outright.
+    """
+    if not provider_id or "/" in provider_id:
+        raise ValueError(f"not a provider id: {provider_id!r}")
+    values = load(path)
+    configured = values.get("custom_scan_roots")
+    configured = dict(configured) if isinstance(configured, dict) else {}
+    cleaned = (raw or "").strip()
+    if cleaned:
+        configured[provider_id] = raw
+    else:
+        # Clearing the field removes the entry rather than storing an empty
+        # string, so the file does not accumulate dead keys.
+        configured.pop(provider_id, None)
+    values["custom_scan_roots"] = configured
     save(path, values)

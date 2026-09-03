@@ -74,8 +74,8 @@ class HermesProvider(SQLiteProvider):
     PARSER_VERSION = 1
     database_names = ("state.db",)
 
-    def roots(self) -> list[Path]:
-        return self.existing_roots(roots(self._home))
+    def curated_roots(self) -> list[Path]:
+        return roots(self._home)
 
     def parse_file(self, path: Path) -> list[Entry]:
         return parse_database(path)

@@ -63,6 +63,7 @@ def build(
     burn: dict | None = None,
     provider_status: dict | None = None,
     celebration: dict | None = None,
+    settings: dict | None = None,
 ) -> dict:
     total_tokens = sum(d.total_tokens for d in daily_by_provider.values())
     total_cost = sum(d.total_cost for d in daily_by_provider.values())
@@ -108,6 +109,11 @@ def build(
         "celebration": celebration or {},
         "burn": burn or {},
         "provider_status": provider_status or {},
+        # What the settings page needs that only the daemon can answer: which
+        # sources are registered, and how many of a person's extra folders
+        # actually survived. Counting their raw patterns instead would report a
+        # folder as accepted when it had been dropped for swallowing a default.
+        "settings": settings or {},
         "panel": {
             "tokens_text": fmt.compact(total_tokens)
             if config_values.get("show_tokens_in_menu")

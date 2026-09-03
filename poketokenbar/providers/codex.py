@@ -152,7 +152,7 @@ class CodexProvider(ScanningProvider):
     reports_cost = True
     PARSER_VERSION = PARSER_VERSION
 
-    def roots(self) -> list[Path]:
+    def curated_roots(self) -> list[Path]:
         return session_roots(self._home)
 
     def parse_file(self, path: Path) -> list[Entry]:

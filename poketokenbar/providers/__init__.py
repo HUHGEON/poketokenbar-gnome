@@ -42,9 +42,14 @@ REGISTRY: list[type] = [
 ]
 
 
-def build(cache=None, home=None) -> list[UsageProvider]:
-    """Every registered provider, sharing one scan cache."""
-    return [cls(cache=cache, home=home) for cls in REGISTRY]
+def build(cache=None, home=None, custom_roots=None) -> list[UsageProvider]:
+    """Every registered provider, sharing one scan cache.
+
+    `custom_roots` is a callable taking a provider id, not a dict: the daemon
+    reloads its config in place, and a captured mapping would keep serving the
+    settings as they were at process start.
+    """
+    return [cls(cache=cache, home=home, custom_roots=custom_roots) for cls in REGISTRY]
 
 
 def registered_ids() -> list[str]:

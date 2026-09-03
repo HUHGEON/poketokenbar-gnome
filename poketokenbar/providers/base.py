@@ -19,9 +19,10 @@ from __future__ import annotations
 from datetime import date as _date
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterator, Protocol
+from typing import Callable, Iterator, Protocol
 
 from .. import pricing
+from .. import scan_roots
 from ..cache import ScanCache
 from ..models import DailyUsage, Entry, ProviderEnrichment
 
@@ -163,9 +164,17 @@ class ScanningProvider:
     # legacy .json sessions, or that read a database instead.
     file_glob: str = "*.jsonl"
 
-    def __init__(self, cache: ScanCache | None = None, home: Path | None = None) -> None:
+    def __init__(
+        self,
+        cache: ScanCache | None = None,
+        home: Path | None = None,
+        custom_roots: Callable[[str], str | None] | None = None,
+    ) -> None:
         self._cache = cache
         self._home = home
+        # A callable, not a value: the daemon reloads its config in place, and a
+        # captured dict would keep serving the settings from process start.
+        self._custom_roots = custom_roots
 
     @property
     def home(self) -> Path:
@@ -173,9 +182,26 @@ class ScanningProvider:
 
     # --- subclass contract -------------------------------------------------
 
-    def roots(self) -> list[Path]:
-        """Existing directories (or files) this source keeps its logs in."""
+    def curated_roots(self) -> list[Path]:
+        """Where this source keeps its logs by default, existing or not."""
         raise NotImplementedError
+
+    def custom_roots_value(self) -> str | None:
+        """The user's extra scan folders for this provider, if any."""
+        if self._custom_roots is None:
+            return None
+        return self._custom_roots(self.id)
+
+    def roots(self) -> list[Path]:
+        """Curated defaults plus the user's extras, folded and filtered to what exists.
+
+        Final on purpose: a provider that overrode this would silently stop
+        honouring the extra-folders setting, which is exactly the failure the
+        setting exists to fix.
+        """
+        return self.existing_roots(
+            scan_roots.union(self.curated_roots(), self.custom_roots_value())
+        )
 
     def parse_file(self, path: Path) -> list[Entry]:
         """Every usage entry in one file. Never raises; returns [] on damage."""

@@ -273,8 +273,8 @@ class GrokProvider(ScanningProvider):
     reports_cost = True
     PARSER_VERSION = 1
 
-    def roots(self) -> list[Path]:
-        return self.existing_roots(session_roots(self._home))
+    def curated_roots(self) -> list[Path]:
+        return session_roots(self._home)
 
     def files(self, root: Path):
         for candidate in super().files(root):

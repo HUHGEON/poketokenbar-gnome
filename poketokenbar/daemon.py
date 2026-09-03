@@ -41,6 +41,34 @@ class Daemon:
         self.spool: Path | None = None
         self.config_values = config.load(config_path)
 
+    def custom_scan_roots(self, provider_id: str) -> str | None:
+        """This provider's extra scan folders, as configured right now."""
+        configured = self.config_values.get("custom_scan_roots")
+        if not isinstance(configured, dict):
+            return None
+        value = configured.get(provider_id)
+        return value if isinstance(value, str) and value.strip() else None
+
+    def settings_payload(self) -> dict:
+        """Provider rows for the settings page, with live extra-folder counts."""
+        from . import scan_roots
+
+        rows = []
+        for provider in self.providers or []:
+            raw = self.custom_scan_roots(provider.id) or ""
+            curated = provider.curated_roots() if hasattr(provider, "curated_roots") else []
+            rows.append(
+                {
+                    "id": provider.id,
+                    "display_name": provider.display_name,
+                    "custom_scan_roots": raw,
+                    "matched_folders": scan_roots.surviving_extra_count(curated, raw)
+                    if raw.strip()
+                    else 0,
+                }
+            )
+        return {"providers": rows}
+
     def poll_once(self) -> dict:
         errors: list[str] = []
         for command in commands.drain(spool=self.spool):
@@ -199,6 +227,7 @@ class Daemon:
             burn=self.burn.payload() if self.burn is not None else None,
             provider_status=status_payload,
             celebration=self.companion_store.celebration if self.companion_store else None,
+            settings=self.settings_payload(),
         )
         state.write(self.state_path, payload)
         # Cleared after publishing so the banner shows once rather than
@@ -234,7 +263,7 @@ def main() -> int:
         state_path=state.default_path(),
         config_path=config.default_path(),
         cache=cache,
-        providers=provider_registry.build(cache=cache),
+        providers=None,  # replaced below, once the daemon can answer for its config
         limits_source=LimitsSource(),
         companion_store=CompanionStore(
             api=PokeAPI(), sprite_store=SpriteStore()
@@ -242,6 +271,11 @@ def main() -> int:
         notifier=Notifier(),
         burn_tracker=BurnTracker(),
         status_checker=StatusChecker(),
+    )
+    # The daemon owns the live config, so it is what answers the providers'
+    # extra-folders lookup — reading it per call, not once at startup.
+    daemon.providers = provider_registry.build(
+        cache=cache, custom_roots=daemon.custom_scan_roots
     )
     try:
         daemon.run()

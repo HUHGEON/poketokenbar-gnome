@@ -38,11 +38,26 @@ def test_build_shares_one_cache_with_every_provider():
 
 @pytest.mark.parametrize("cls", providers.REGISTRY, ids=lambda c: c.id)
 def test_scanning_providers_implement_the_subclass_contract(cls):
-    """roots() and parse_file() are the only things a source must supply."""
+    """curated_roots() and parse_file() are the only things a source supplies."""
     if not issubclass(cls, ScanningProvider):
         pytest.skip(f"{cls.__name__} is not file-scanning")
-    assert cls.roots is not ScanningProvider.roots, "roots() not implemented"
+    assert cls.curated_roots is not ScanningProvider.curated_roots, "curated_roots() missing"
     assert cls.parse_file is not ScanningProvider.parse_file, "parse_file() not implemented"
+
+
+@pytest.mark.parametrize("cls", providers.REGISTRY, ids=lambda c: c.id)
+def test_no_provider_overrides_the_final_roots(cls):
+    """`roots()` is where extra scan folders get folded in.
+
+    A provider that overrode it would still scan correctly and still pass every
+    one of its own tests, while silently ignoring the setting — so the guard has
+    to live here rather than in each provider's suite.
+    """
+    if not issubclass(cls, ScanningProvider):
+        pytest.skip(f"{cls.__name__} is not file-scanning")
+    assert cls.roots is ScanningProvider.roots, (
+        f"{cls.__name__} overrides roots(); implement curated_roots() instead"
+    )
 
 
 @pytest.mark.parametrize("cls", providers.REGISTRY, ids=lambda c: c.id)
