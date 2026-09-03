@@ -560,3 +560,18 @@ def test_the_pokedex_can_release_a_pin_as_well_as_set_one(payload):
         "'follow the companion again'"
     )
     assert "representative_id" in payload["panel"]
+
+
+def test_the_popup_offers_the_update_the_daemon_can_apply(payload):
+    """Without it a fix means finding the repo again and re-running install.sh,
+    which is enough friction that one nobody installs may as well not exist."""
+    source = "\n".join(source_code(strip_strings=True))
+    assert "update.available" in source
+    assert "update.installed_short" in source
+    with_strings = "\n".join(source_code())
+    assert "enqueue('update'" in with_strings, "nothing asks the daemon to apply it"
+    assert "update.supported" in source, (
+        "a checkout cannot be updated by overwriting it, and a button that "
+        "refuses is worse than a sentence saying why"
+    )
+    assert set(payload["update"]) >= {"supported", "installed_short", "available_short"}

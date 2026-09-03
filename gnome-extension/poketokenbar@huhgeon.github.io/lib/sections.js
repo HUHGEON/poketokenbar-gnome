@@ -720,6 +720,41 @@ class SettingsSection extends Section {
             this._addChoice(choice, config);
         this._addLanguage(config);
         this._addScanFolders(state);
+        this._addUpdate(state);
+    }
+
+    /** Whether a newer commit is published, and a button to take it.
+     *
+     * Without it a fix means finding the repo again and re-running install.sh,
+     * which is enough friction that one nobody installs may as well not exist.
+     * The daemon does the work — it is the half that is always running, and two
+     * processes rewriting one directory is not something to leave to luck.
+     */
+    _addUpdate(state) {
+        const t = key => this._reader.text(key);
+        const update = state?.update ?? {};
+        this.add_child(heading(t('update')));
+
+        // Running from a git checkout. Overwriting one would throw away
+        // whatever is being worked on, so the daemon refuses — and a button
+        // that refuses is worse than a sentence saying why.
+        if (!update.supported) {
+            this.add_child(paragraph(t('update_unsupported'), 'poketokenbar-subtle'));
+            return;
+        }
+        if (!update.available) {
+            this.add_child(label(
+                t('update_current').replace('%1', update.installed_short || '?'),
+                'poketokenbar-subtle'));
+            if (update.error)
+                this.add_child(paragraph(update.error, 'poketokenbar-subtle'));
+            return;
+        }
+        this.add_child(label(t('update_available'), 'poketokenbar-key'));
+        this.add_child(label(
+            `${update.installed_short || ''} \u2192 ${update.available_short}`,
+            'poketokenbar-subtle'));
+        this.add_child(button(t('update_now'), () => Commands.update()));
     }
 
     _addToggle(key, stringKey, config) {
