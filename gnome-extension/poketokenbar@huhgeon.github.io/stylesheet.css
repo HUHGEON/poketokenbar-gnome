@@ -144,6 +144,14 @@
   background-color: rgba(255, 255, 255, 0.05);
 }
 
+/* The stand-in for an item with no sprite of its own — an egg, a Mint. Sized to
+   match the 32px sprites beside it so the rows line up either way. */
+.poketokenbar-item-emoji {
+  font-size: 24px;
+  width: 32px;
+  text-align: center;
+}
+
 /* --- companion and collection -------------------------------------------- */
 
 .poketokenbar-companion-sprite {

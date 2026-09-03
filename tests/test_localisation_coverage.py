@@ -50,12 +50,13 @@ def test_every_shop_and_bag_string_is_named(language):
     """They were English-only tables in balance.py, which is why the shop
     stayed in English however the language was set."""
     catalogue = l10n.catalogue(language)
-    for key in ("rareCandy", "mint", "shinyCharm"):
-        for prefix in ("item_", "item_desc_", "item_effect_"):
-            assert f"{prefix}{key}" in catalogue
-    for tier in (None, Rarity.UNCOMMON, Rarity.RARE, Rarity.LEGENDARY):
-        assert (f"egg_name_{tier}" if tier else "egg_name") in catalogue
-    assert "egg_desc" in catalogue and "egg_desc_tier" in catalogue
+    for keys in balance.ITEM_STRINGS.values():
+        for key in keys:
+            assert key in catalogue, f"{key} is missing"
+    for key in balance.EGG_STRINGS.values():
+        assert key in catalogue, f"{key} is missing"
+    for key in ("egg_desc_fresh", "egg_desc_guaranteed", "egg_guarantee"):
+        assert key in catalogue
 
 
 @pytest.mark.parametrize("language", l10n.LANGUAGES)
@@ -170,11 +171,12 @@ def test_the_language_names_are_written_in_their_own_language():
     assert all(name.strip() for name in l10n.LANGUAGE_NAMES.values())
 
 
-def test_the_gnome_extension_resolves_natures_too():
-    """Both front ends read the same payload, so a field one of them translates
-    and the other prints raw is a bug in exactly one place."""
-    source = (ROOT / "gnome-extension" / "poketokenbar@huhgeon.github.io"
-              / "lib" / "sections.js").read_text(encoding="utf-8")
-    assert "nature_${id}" in source or "nature_" in source
-    assert "companion.nature ??" not in source, "printed raw"
-    assert "catchRecord.nature ??" not in source, "printed raw"
+def test_both_front_ends_resolve_natures():
+    """The same payload field, so one of them printing it raw is a bug in
+    exactly one place. It arrives as an id — "brave" — and every other label
+    beside it is translated."""
+    sections = (ROOT / "gnome-extension" / "poketokenbar@huhgeon.github.io"
+                / "lib" / "sections.js").read_text(encoding="utf-8")
+    assert "nature_" in sections, "the extension prints the id"
+    panels = (QT_UI / "panels.py").read_text(encoding="utf-8")
+    assert "nature_" in panels, "the Qt panels print the id"

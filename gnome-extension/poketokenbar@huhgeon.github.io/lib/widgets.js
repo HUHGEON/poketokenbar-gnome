@@ -6,6 +6,7 @@
 
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
+import Pango from 'gi://Pango';
 import St from 'gi://St';
 
 /** Utilisation bands, matching limits.level() in the daemon. */
@@ -40,6 +41,30 @@ export function label(text, styleClass = '') {
         style_class: styleClass,
         y_align: Clutter.ActorAlign.CENTER,
     });
+}
+
+/**
+ * A label for a sentence rather than a value: it wraps instead of running off.
+ *
+ * St.Label lays a line out at its natural width and the popup is a fixed 380px,
+ * so every shop description was cut off mid-sentence — "Send off your current
+ * Pokemon for an egg guarant…" is not a description of anything. Wrapping needs
+ * three things together: the wrap flag, a wrap mode, and ellipsize turned off,
+ * because the default ellipsize wins over line_wrap and re-truncates the text.
+ * The actor also has to be allowed to expand, or it wraps at its natural width
+ * and every word ends up on its own line.
+ */
+export function paragraph(text, styleClass = '') {
+    const widget = new St.Label({
+        text: text ?? '',
+        style_class: styleClass,
+        x_expand: true,
+        y_align: Clutter.ActorAlign.CENTER,
+    });
+    widget.clutter_text.line_wrap = true;
+    widget.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+    widget.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+    return widget;
 }
 
 export function row(children, styleClass = 'poketokenbar-row') {
@@ -77,19 +102,33 @@ class Meter extends St.Widget {
         this._fill = new St.Widget({style_class: 'poketokenbar-meter-fill'});
         this.add_child(this._fill);
         this._fraction = 0;
-        this.connect('notify::width', () => this._layoutFill());
     }
 
     /** `fraction` is 0..1; anything past 1 is clamped so a full bar stays full. */
     setFraction(fraction, level = 'ok') {
         this._fraction = Math.max(0, Math.min(1, fraction || 0));
         this._fill.style_class = `poketokenbar-meter-fill ${levelClass(level)}`;
-        this._layoutFill();
+        this.queue_relayout();
     }
 
-    _layoutFill() {
-        const width = this.get_width();
-        this._fill.set_size(Math.round(width * this._fraction), this.get_height());
+    /**
+     * The fill is sized from the allocation, not measured when it is set.
+     *
+     * Every caller fills a meter in before adding it to its section, so asking
+     * `get_width()` there measures an actor that is not in the tree yet — which
+     * makes St log `st_widget_get_theme_node called on the widget ... which is
+     * not in the stage` for each meter on each poll. Sizing here instead is
+     * also simply the right place: the width is not known until then.
+     */
+    vfunc_allocate(box) {
+        super.vfunc_allocate(box);
+        const height = box.get_height();
+        this._fill.allocate(new Clutter.ActorBox({
+            x1: 0,
+            y1: 0,
+            x2: Math.round(box.get_width() * this._fraction),
+            y2: height,
+        }));
     }
 });
 
@@ -110,17 +149,20 @@ export function placeholder(text) {
  * PopupMenu via addMenuItem. Adding one to an St container does not lay out —
  * the whole settings tab would have rendered as nothing.
  */
-export function toggleRow(text, value, onToggle) {
+export function toggleRow(text, value, onToggle, words = null) {
     const control = new St.Button({
-        label: value ? 'on' : 'off',
+        // `words` is the catalogue; without one the switch keeps saying "on"
+        // and "off" in English next to a translated label.
+        label: words ? words(value ? 'on' : 'off') : (value ? 'on' : 'off'),
         style_class: value ? 'poketokenbar-toggle-on' : 'poketokenbar-toggle-off',
         can_focus: true,
         reactive: true,
         track_hover: true,
     });
     control.connect('clicked', () => onToggle(!value));
-    const spacer = new St.Widget({x_expand: true});
-    return row([label(text, 'poketokenbar-key'), spacer, control]);
+    // The label wraps: several settings need a sentence, and a fixed-width
+    // popup cuts a one-line label off rather than making the popup wider.
+    return row([paragraph(text, 'poketokenbar-key'), control]);
 }
 
 /**
@@ -153,6 +195,22 @@ export function grouped(value) {
 }
 
 
+/**
+ * "resets in 2h 15m" from an ISO-8601 instant.
+ *
+ * `resets_at` arrives as the raw timestamp the API returned. Rendering it
+ * verbatim puts `2026-09-03T10:00:00Z` under the meter, which is data rather
+ * than an answer to "how long have I got".
+ */
+export function resetsIn(iso, strings) {
+    const remaining = remainingSeconds(iso);
+    if (remaining === null)
+        return '';
+    if (remaining <= 0)
+        return strings('resetting_now');
+    return duration(remaining, strings);
+}
+
 /** Seconds until an ISO-8601 instant, or null if it is not one. */
 export function remainingSeconds(iso) {
     if (!iso)
@@ -161,7 +219,7 @@ export function remainingSeconds(iso) {
     return Number.isNaN(remaining) ? null : remaining / 1000;
 }
 
-/** A coarse "two units" duration, the way the popover writes a countdown.
+/** A coarse "two units" countdown, the way the popover writes one.
  *
  * Two units at most and never a smaller beside a larger: "6일 2시간",
  * "2시간 36분", "26초". Through the catalogue, because it used to build
@@ -184,33 +242,19 @@ export function duration(seconds, strings) {
     return unit('unit_second', secs);
 }
 
-/**
- * "2시간 36분" from an ISO-8601 instant.
+/** "just now" / "3 min ago" for the footer's freshness line.
  *
- * `resets_at` arrives as the raw timestamp the API returned. Rendering it
- * verbatim puts `2026-09-03T10:00:00Z` under the meter, which is data rather
- * than an answer to "how long have I got".
- */
-export function resetsIn(iso, strings) {
-    const remaining = remainingSeconds(iso);
-    if (remaining === null)
-        return '';
-    if (remaining <= 0)
-        return strings('resetting_now');
-    return duration(remaining, strings);
-}
-
-/** "방금 갱신" / "3분 전 갱신" for the footer's freshness line.
- *
- * It used to return English regardless of the language, which is the one
- * string on screen at all times.
+ * `strings` is the catalogue, as in `resetsIn`: the footer is the one line that
+ * is on screen every second the popup is open, and it was the last one still
+ * in English.
  */
 export function ago(seconds, strings) {
     if (seconds === null || seconds === undefined)
         return '';
+    const t = strings ?? (key => key);
     if (seconds < 90)
-        return strings('updated_just_now');
-    return strings('updated_minutes_ago').replace('%1', String(Math.round(seconds / 60)));
+        return t('just_now');
+    return t('minutes_ago').replace('%1', String(Math.round(seconds / 60)));
 }
 
 /** A small pill, for badges like RAISING or a provider incident. */

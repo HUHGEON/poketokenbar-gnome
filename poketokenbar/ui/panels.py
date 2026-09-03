@@ -486,7 +486,7 @@ class ShopPanel(Panel):
             # there is the one thing someone wants to know.
             action = label(self.t("insufficient_tokens"), faint=True, size=12)
 
-        price = self.fill("price", item.get("price_text", ""))
+        price = f'{self.t("price")} {item.get("price_text", "")}'
         footer = spread(label(price, faint=True, size=12), action)
         body = column(
             title,

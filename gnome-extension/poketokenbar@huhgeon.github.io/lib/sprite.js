@@ -17,9 +17,15 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
-import {DEFAULT_QUALITY, capFrameRate, frameFloor} from './framecap.js';
-import {MINIMUM_FRAME_MS, samePixels, walkFrames} from './frames.js';
+import {DEFAULT_QUALITY, LOOP_SIGNATURE, capFrameRate, frameFloor, loopLength}
+    from './framecap.js';
 
+// GIF authoring commonly writes 0 or 10ms delays meaning "as fast as possible",
+// which browsers clamp. Without a floor a sprite would spin the compositor.
+const MINIMUM_FRAME_MS = 20;
+// Frames past this are dropped. Gen-V sprites run ~55 frames; anything far
+// beyond that is not one of ours and is not worth the memory.
+const MAX_FRAMES = 240;
 
 /** The Cogl context `set_bytes` wants, on the versions that want one.
  *
@@ -86,28 +92,41 @@ function frameFromPixbuf(pixbuf, delay) {
     return {content, delay, width, height};
 }
 
-/** A GLib.TimeVal driven forward by hand.
+/** The animation's own clock, as the GTimeVal the iterator still takes.
  *
- * GdkPixbuf's iterator is a function of wall-clock time and has no notion of
- * "next frame", so decoding at full speed needs a clock that is not the wall
- * clock. Kept behind two methods so `walkFrames` can be handed a plain object
- * in a test.
+ * GLib.TimeVal is deprecated and gdk_pixbuf_animation_iter_advance has no
+ * replacement that takes anything else, so the choice is this or the documented
+ * shortcut of passing null — and null means "now". A decode loop finishes in
+ * microseconds, so "now" never reaches the second frame: every sprite came out
+ * as two copies of frame one and sat there, perfectly still, on a panel that
+ * was supposed to be animating.
  */
-function syntheticClock() {
-    const timeVal = new GLib.TimeVal();
-    let micros = 0;
-    timeVal.tv_sec = 0;
-    timeVal.tv_usec = 0;
-    return {
-        advance(seconds) {
-            micros += Math.round(seconds * 1000000);
-            timeVal.tv_sec = Math.floor(micros / 1000000);
-            timeVal.tv_usec = micros % 1000000;
-        },
-        value() {
-            return timeVal;
-        },
-    };
+function clockAt(milliseconds) {
+    return new GLib.TimeVal({
+        tv_sec: Math.floor(milliseconds / 1000),
+        tv_usec: Math.round(milliseconds % 1000) * 1000,
+    });
+}
+
+/** What a frame looks like, as a value that can be compared to another frame.
+ *
+ * The iterator hands back one pixbuf and rewrites its pixels in place, so
+ * frames cannot be compared by identity, and holding their bytes to compare
+ * later would compare every frame with itself. A digest taken on the spot is
+ * the one thing that survives the next advance. MD5 because it is the cheapest
+ * one GLib offers; nothing here is a secret.
+ */
+function digestOf(pixbuf) {
+    return GLib.compute_checksum_for_bytes(
+        GLib.ChecksumType.MD5, pixbuf.read_pixel_bytes());
+}
+
+function stillFrame(pixbuf) {
+    try {
+        return [frameFromPixbuf(pixbuf, 0)];
+    } catch (_e) {
+        return [];
+    }
 }
 
 /**
@@ -116,6 +135,10 @@ function syntheticClock() {
  * Returns [] when the file cannot be read, so callers fall back to a glyph
  * rather than rendering a broken image. A still PNG comes back as one frame,
  * which is also what a GIF with a single frame should look like.
+ *
+ * The animation is walked on its own clock rather than the wall clock, and the
+ * walk stops where `loopLength` says the sequence starts over — the iterator
+ * itself never stops, it just wraps round and hands out the loop again.
  */
 export function decodeFrames(path) {
     if (!path)
@@ -127,39 +150,103 @@ export function decodeFrames(path) {
         return [];
     }
 
-    if (animation.is_static_image()) {
-        try {
-            return [frameFromPixbuf(animation.get_static_image(), 0)];
-        } catch (_e) {
-            return [];
-        }
-    }
+    if (animation.is_static_image())
+        return stillFrame(animation.get_static_image());
 
-    const clock = syntheticClock();
     let iter;
     try {
-        iter = animation.get_iter(clock.value());
+        iter = animation.get_iter(clockAt(0));
     } catch (_e) {
-        return [];
+        // No usable GTimeVal on this GLib. One still frame is a worse sprite
+        // than an animated one and a much better one than none.
+        return stillFrame(animation.get_static_image());
     }
 
-    let first = null;
-    return walkFrames(
-        iter, clock,
-        delay => {
-            const pixbuf = iter.get_pixbuf();
-            const frame = frameFromPixbuf(pixbuf, delay);
-            if (first === null)
-                first = pixbuf.read_pixel_bytes().toArray();
-            return frame;
-        },
-        () => {
+    const frames = [];
+    // One digest per kept frame, so `loopLength` compares what is on screen
+    // rather than what came off the decoder.
+    const digests = [];
+    let elapsed = 0;
+    // The extra room is what the loop signature is matched in: the wrap is only
+    // provable a few frames after it has happened.
+    for (let i = 0; i < MAX_FRAMES + LOOP_SIGNATURE; i++) {
+        // get_delay_time is milliseconds; the frames themselves and framecap
+        // work in seconds, so the conversion happens once, here.
+        const delay = Math.max(MINIMUM_FRAME_MS, iter.get_delay_time());
+        let pixbuf;
+        try {
+            pixbuf = iter.get_pixbuf();
+        } catch (_e) {
+            break;
+        }
+        const digest = digestOf(pixbuf);
+
+        if (digests.length > 0 && digest === digests[digests.length - 1]) {
+            // Gen-V sprites hold a pose across several frames — Lombre draws
+            // 112 frames out of 47 distinct images. Lengthening the frame
+            // before it looks identical and saves that many texture uploads.
+            frames[frames.length - 1].delay += delay / 1000;
+        } else {
+            let frame;
             try {
-                return samePixels(first, iter.get_pixbuf().read_pixel_bytes().toArray());
+                frame = frameFromPixbuf(pixbuf, delay / 1000);
             } catch (_e) {
-                return true;
+                break;
             }
-        });
+            frames.push(frame);
+            digests.push(digest);
+        }
+
+        const loop = loopLength(digests);
+        if (loop > 0)
+            return frames.slice(0, loop);
+
+        elapsed += delay;
+        if (elapsed > 60000)
+            break;  // pathological file; keep what we have
+        try {
+            iter.advance(clockAt(elapsed));
+        } catch (_e) {
+            break;
+        }
+    }
+    return frames.slice(0, MAX_FRAMES);
+}
+
+/* Decoded frames, keyed by path.
+ *
+ * Rebuilding a section makes fresh Sprite actors for files that have not
+ * changed — the Pokedex grid alone is 24 of them — and decoding one Gen-V GIF
+ * means uploading ~55 textures. Clutter content is refcounted and shareable
+ * between actors, so a second Sprite on the same path can simply be handed the
+ * frames the first one decoded.
+ */
+const frameCache = new Map();
+
+// Bounded because the entries are textures living in the compositor, and a
+// full Pokedex is a thousand species. Comfortably more than one popup shows.
+const MAX_CACHED_SPRITES = 96;
+
+function cachedFrames(path) {
+    if (frameCache.has(path)) {
+        // Re-inserted so the least recently used entry is the one that goes:
+        // Map iterates in insertion order.
+        const frames = frameCache.get(path);
+        frameCache.delete(path);
+        frameCache.set(path, frames);
+        return frames;
+    }
+    const frames = decodeFrames(path);
+    frameCache.set(path, frames);
+    if (frameCache.size > MAX_CACHED_SPRITES)
+        frameCache.delete(frameCache.keys().next().value);
+    return frames;
+}
+
+/** Drop every decoded sprite. Called from disable(): the textures are held in
+ * the compositor's memory, and a disabled extension must not be holding any. */
+export function clearFrameCache() {
+    frameCache.clear();
 }
 
 /**
@@ -219,7 +306,7 @@ class Sprite extends St.Widget {
         // between the versions the manifest claims, and an uncaught throw here
         // takes the whole panel down — usage tracker included — over a picture.
         try {
-            this._sourceFrames = decodeFrames(path);
+            this._sourceFrames = cachedFrames(path);
         } catch (error) {
             logError(error, `PokeTokenBar: could not decode ${path}`);
             this._sourceFrames = [];

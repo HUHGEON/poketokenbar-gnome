@@ -429,9 +429,19 @@ def apply_usage(
         # the species data is normalised, and checking "is this the final form"
         # first then graduates the disguise straight into the Pokedex — the
         # wrong species, permanently, with the real Ditto never revealed.
+        #
+        # It also means an evolution below can never be a Ditto's: by the time
+        # one gets there the reveal has already happened on an earlier pass.
         if mon.ditto_disguise is not None and not mon.ditto_revealed:
+            was_showing = mon.current_id
             mon.ditto_revealed = True
             events.ditto_revealed = True
+            # A pin on the disguise follows the reveal. The form it was
+            # pretending to grow into is one nobody owns, and the form it was
+            # pretending to be is gone — leaving the panel on either would show
+            # a species that is not in anyone's Pokedex.
+            if state.representative_species_id == was_showing:
+                state.representative_species_id = mon.current_id
             break
 
         if mon.is_final_form:
@@ -441,7 +451,16 @@ def apply_usage(
             break
 
         mon.used_at_stage -= threshold  # overflow carries into the new stage
+        was_showing = mon.current_id
         mon.stage_index += 1
         events.evolved_to = mon.current_id
+        # A pin on the form that just evolved moves up with it. Pinning the
+        # companion as it is now is the ordinary reason to pin at all, and
+        # leaving the panel on the outgrown form made the evolution look like it
+        # had not happened. A pin on any *other* form stays exactly where it is:
+        # that one names a species someone chose over the companion, and the
+        # companion growing is no reason to overrule it.
+        if state.representative_species_id == was_showing:
+            state.representative_species_id = mon.current_id
 
     return events

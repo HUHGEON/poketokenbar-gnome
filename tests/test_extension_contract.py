@@ -395,7 +395,7 @@ def test_every_settings_toggle_maps_to_a_real_default():
     from poketokenbar import config as config_module
 
     source = (EXTENSION_DIR / "lib" / "sections.js").read_text(encoding="utf-8")
-    keys = set(re.findall(r"""\{key:\s*['"](\w+)['"]""", source))
+    keys = set(re.findall(r"""\{\s*key:\s*['"](\w+)['"]""", source))
     assert keys, "no declared toggles found; has TOGGLES been renamed?"
     unknown = keys - set(config_module.DEFAULTS)
     assert not unknown, f"settings toggles with no daemon default: {sorted(unknown)}"
@@ -483,9 +483,11 @@ def test_every_daemon_setting_is_reachable_from_the_ui():
     source = "\n".join(
         p.read_text(encoding="utf-8") for p in (EXTENSION_DIR / "lib").glob("*.js")
     )
-    reachable = set(re.findall(r"""\{key:\s*['"](\w+)['"]""", source))
+    # Every declaration table names its setting as `{key: '...'}`, whether or
+    # not the brace and the key share a line, and anything set directly names
+    # it in the Config.set call.
+    reachable = set(re.findall(r"""\{\s*key:\s*['"](\w+)['"]""", source))
     reachable.update(re.findall(r"""Config\.set\(\s*['"](\w+)['"]""", source))
-    reachable.update(re.findall(r"""_addChoice\(\s*['"](\w+)['"]""", source))
 
     not_for_the_ui = {
         # Written by dragging the pet, not by typing a coordinate.

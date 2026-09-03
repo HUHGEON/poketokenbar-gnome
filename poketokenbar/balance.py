@@ -118,9 +118,47 @@ ITEM_SPRITE = {
     "shinyCharm": "shiny-charm",
 }
 
-# Item names, descriptions and effect hints live in l10n, keyed "item_<key>",
-# "item_desc_<key>" and "item_effect_<key>". They were English-only tables here
-# and that is why the shop stayed in English whatever the language was set to.
+# Catalogue keys for the words each item is shown with: (name, description,
+# effect). The English tables below stay as the fallback for a caller with no
+# language — the shop and the bag resolve these instead, so a Korean UI stops
+# listing "Rare Candy · Raises your Pokemon's EXP by 100M." in English.
+ITEM_STRINGS = {
+    "rareCandy": ("item_rare_candy", "item_rare_candy_desc", "item_rare_candy_effect"),
+    "mint": ("item_mint", "item_mint_desc", "item_mint_effect"),
+    "shinyCharm": ("item_shiny_charm", "item_shiny_charm_desc", "item_shiny_charm_effect"),
+}
+
+# The egg tiers the shop sells, by the suffix in their key. None is the plain
+# egg with no guarantee.
+EGG_STRINGS = {
+    None: "egg_common",
+    "uncommon": "egg_uncommon",
+    "rare": "egg_rare",
+}
+
+ITEM_LABEL = {
+    "rareCandy": "Rare Candy",
+    "mint": "Mint",
+    "shinyCharm": "Shiny Charm",
+}
+
+ITEM_DESCRIPTION = {
+    "rareCandy": "Raises your Pokemon's EXP by 100M.",
+    "mint": "Randomly changes your Pokemon's nature.",
+    "shinyCharm": "While owned, raises the chance of hatching a shiny.",
+}
+
+ITEM_EFFECT = {
+    "rareCandy": "+100M XP",
+    "mint": "Random nature",
+    "shinyCharm": "Shiny rate up - active",
+}
+
+EGG_DESCRIPTION = {
+    None: "Send off your current Pokemon and start fresh with a new egg.",
+    "uncommon": "Send off your current Pokemon for an egg guaranteed to hatch Uncommon or better.",
+    "rare": "Send off your current Pokemon for an egg guaranteed to hatch Rare or better.",
+}
 
 NATURES = [
     "hardy", "lonely", "brave", "adamant", "naughty",

@@ -93,53 +93,65 @@ class CompanionStore:
         self._persist()
 
     def _note_celebration(self, events) -> None:
-        """The banner the popup shows once, in the save's language.
+        """Build the banner the popup shows once, in the user's language.
 
-        Every one of these was a hardcoded English sentence, so a Korean
-        install was congratulated in English at exactly the moments the app is
-        trying to be charming. The notification uses the same strings.
+        Shares the notification catalogue rather than carrying a second set of
+        words: the banner and the toast announce the same event, and two
+        wordings for one thing is how they drift apart. They were English
+        literals before, which made them the largest untranslated surface in a
+        UI that is otherwise fully localized.
         """
         if events is None:
             return
         mon = self.state.active
-        name = self.species_name(mon.current_id, self.state.language) if mon else ""
-        if events.ditto_revealed:
-            disguise = self.species_name(
-                mon.ditto_disguise, self.state.language) if mon else ""
-            self.celebration = {
-                "kind": "ditto",
-                "title": self._text("notify_ditto_title"),
-                "detail": self._text("notify_ditto_body", disguise or name),
+        language = self.state.language
+        name = self.species_name(mon.current_id, language) if mon else ""
+        label = name or l10n.t("raising", language)
+        shiny = mon is not None and mon.is_shiny
+
+        def banner(kind: str, title_key: str, body_key: str, subject: str) -> dict:
+            return {
+                "kind": kind,
+                "title": l10n.t(title_key, language),
+                "detail": l10n.t(body_key, language).replace("%1", subject),
             }
+
+        if events.ditto_revealed:
+            was = self.disguise_name() or label
+            self.celebration = banner(
+                "ditto",
+                "notif_shiny_ditto_title" if shiny else "notif_ditto_title",
+                "notif_shiny_ditto_body" if shiny else "notif_ditto_body",
+                was)
         elif events.graduated is not None:
             # From the record, not from the companion: graduating clears the
-            # slot, so by the time this runs there is no active Pokemon to take
-            # a name from and the banner read "? — saved to your Pokedex".
-            graduate_name = self.species_name(
-                events.graduated.final_id, self.state.language)
-            self.celebration = {
-                "kind": "graduated",
-                "title": self._text("notify_graduate_title"),
-                "detail": self._text("notify_graduate_body", graduate_name),
-            }
+            # slot, so by the time this runs there is no active Pokemon left to
+            # take a name from and the banner read "raising — saved to your
+            # Pokedex".
+            self.celebration = banner(
+                "graduated", "notif_graduate_title", "notif_graduate_body",
+                self.species_name(events.graduated.final_id, language) or label)
         elif events.evolved_to is not None:
-            self.celebration = {
-                "kind": "evolved",
-                "title": self._text("notify_evolve_title"),
-                "detail": self._text("notify_evolve_body", name or "?"),
-            }
+            self.celebration = banner(
+                "evolved", "notif_evolve_title", "notif_evolve_body", label)
         elif events.hatched is not None:
-            shiny = mon is not None and mon.is_shiny
-            self.celebration = {
-                "kind": "shiny" if shiny else "hatched",
-                "title": self._text(
-                    "notify_shiny_title" if shiny else "notify_hatch_title"),
-                "detail": (
-                    self._text("notify_shiny_body", name,
-                               balance.SHINY_DENOMINATOR)
-                    if shiny else self._text("notify_hatch_body", name)
-                ),
-            }
+            self.celebration = banner(
+                "shiny" if shiny else "hatched",
+                "notif_shiny_hatch_title" if shiny else "notif_hatch_title",
+                "notif_shiny_hatch_body" if shiny else "notif_hatch_body",
+                label)
+
+    def disguise_name(self) -> str | None:
+        """What a Ditto is pretending to be, for the reveal notification.
+
+        Read from the disguise rather than the companion: by the time anything
+        announces the reveal the companion is already called Ditto, and "you
+        thought it was Ditto" is not the joke.
+        """
+        mon = self.state.active
+        if mon is None or mon.ditto_disguise is None:
+            return None
+        return self.species_name(mon.ditto_disguise, self.state.language) or None
 
     def _line_for_egg(self):
         """Species data for a hatch, or None when offline."""
@@ -200,16 +212,11 @@ class CompanionStore:
             return None, False
         return mon.current_id, mon.is_shiny
 
-    def _egg_sprite(self) -> str:
-        if self.sprites is None:
-            return ""
-        path = self.sprites.egg_path()
-        return str(path) if path else ""
-
     def panel_sprite_path(self) -> str:
         species_id, shiny = self.panel_species()
         if species_id is None:
-            # An egg is what the panel shows before the first hatch.
+            # An egg is what the panel and the pet show before the first hatch.
+            # Returning nothing left both of them blank.
             return self._egg_sprite()
         if self.sprites is None:
             return ""
@@ -244,9 +251,33 @@ class CompanionStore:
             "representative_species_id": self.state.representative_species_id,
         }
 
+    def _status_message(self, kind: str) -> str:
+        """The catalogue line for one display state.
+
+        Not `f"status_{kind.lower()}"`: display_state returns "levelUp", whose
+        lower case is `status_levelup`, and no such key exists — so a companion
+        that had just evolved reported the literal string "status_levelup" on
+        the panel, and `status_grew` was never reachable at all.
+        """
+        language = self.state.language
+        if kind == "levelUp":
+            mon = self.state.active
+            name = self.species_name(mon.current_id, language) if mon else ""
+            if not name:
+                return l10n.t("status_grew", language)
+            return l10n.t("status_evolved", language).replace("%1", name)
+        return l10n.t(f"status_{kind.lower()}", language)
+
     def payload(self, today_tokens: int = 0, limit_warning: bool = False) -> dict:
         """Companion section of state.json."""
-        kind = companion.display_state(self.state, today_tokens, limit_warning)
+        # An evolution this poll is what puts the companion in its level-up
+        # state. It was never passed, so the celebration mood existed in the
+        # ported code and could not occur.
+        just_evolved = (
+            self.last_events is not None and self.last_events.evolved_to is not None
+        )
+        kind = companion.display_state(
+            self.state, today_tokens, limit_warning, just_evolved=just_evolved)
         mon = self.state.active
         if mon is None:
             progress = min(1.0, self.state.egg_usage / balance.EGG_HATCH_THRESHOLD)
@@ -256,15 +287,16 @@ class CompanionStore:
                 "egg_usage": self.state.egg_usage,
                 "egg_progress": round(progress, 4),
                 "egg_tier": str(self.state.egg_tier) if self.state.egg_tier else None,
-                # The real egg from PokeAPI, cropped. Before this the egg stage
-                # had no image at all and the front ends fell back to a glyph,
-                # which is not the same picture the macOS app shows.
+                # The real egg from PokeAPI, cropped to its content. It is a
+                # 96x96 canvas around a 28x30 egg, so drawn uncropped it is a
+                # third the size of every sprite beside it — and before this
+                # the egg stage had no picture at all.
                 "sprite_path": self._egg_sprite(),
                 "dex_count": len(self.state.dex),
                 "spendable_tokens": self.state.spendable_tokens,
                 "spendable_text": _compact(self.state.spendable_tokens),
                 "display_state": kind,
-                "status_message": l10n.t(f"status_{kind.lower()}", self.state.language),
+                "status_message": self._status_message(kind),
                 **self._panel_fields(),
             }
 
@@ -309,7 +341,7 @@ class CompanionStore:
             "spendable_tokens": self.state.spendable_tokens,
             "spendable_text": _compact(self.state.spendable_tokens),
             "display_state": kind,
-            "status_message": l10n.t(f"status_{kind.lower()}", self.state.language),
+            "status_message": self._status_message(kind),
             **self._panel_fields(),
         }
 
@@ -330,6 +362,12 @@ class CompanionStore:
         self._persist()
         return message
 
+    def _egg_sprite(self) -> str:
+        if self.sprites is None:
+            return ""
+        path = self.sprites.egg_path()
+        return str(path) if path else ""
+
     def _item_sprite(self, key: str) -> str:
         name = balance.ITEM_SPRITE.get(key)
         if not name or self.sprites is None:
@@ -337,17 +375,33 @@ class CompanionStore:
         path = self.sprites.item_path(name)
         return str(path) if path else ""
 
-    def _text(self, key: str, *values) -> str:
-        """A catalogue string in the save's language, placeholders filled.
+    def _item_words(self, key: str) -> tuple[str, str, str]:
+        """Name, description and effect for one item, in the user's language.
 
-        The shop and the bag used to take their names and descriptions from
-        English-only tables, so setting the language translated everything
-        around them and left the items themselves in English.
+        The Rare Candy's numbers are read off the balance constants and
+        substituted in, so the description cannot drift from what the item
+        actually does the way a hardcoded "100M" would.
         """
-        text = l10n.t(key, self.state.language or "en")
-        for index, value in enumerate(values, start=1):
-            text = text.replace(f"%{index}", str(value))
-        return text
+        language = self.state.language
+        names = balance.ITEM_STRINGS.get(key)
+        if names is None:
+            return balance.ITEM_LABEL.get(key, key), "", ""
+        experience = _compact(balance.RARE_CANDY_XP)
+        resolved = [l10n.t(name, language).replace("%1", experience) for name in names]
+        return resolved[0], resolved[1], resolved[2]
+
+    def _egg_words(self, tier: str | None) -> tuple[str, str, str]:
+        """Name, description and guarantee badge for one egg tier."""
+        language = self.state.language
+        name = l10n.t(balance.EGG_STRINGS.get(tier, "egg_common"), language)
+        if tier is None:
+            return name, l10n.t("egg_desc_fresh", language), ""
+        rarity = l10n.t(tier, language)
+        return (
+            name,
+            l10n.t("egg_desc_guaranteed", language).replace("%1", rarity),
+            l10n.t("egg_guarantee", language).replace("%1", rarity),
+        )
 
     def shop_payload(self) -> list[dict]:
         spendable = self.state.spendable_tokens
@@ -355,20 +409,14 @@ class CompanionStore:
         for e in shop.entries(self.state):
             if e.kind == "item":
                 sprite = self._item_sprite(e.key)
-                label = self._text(f"item_{e.key}")
-                description = self._item_description(e.key)
+                label, description, _effect = self._item_words(e.key)
                 badge = ""
             else:
-                # The real egg, cropped — the same one the companion hatches
-                # from. ITEM_SPRITE has no "egg" entry, so asking for one
-                # returned nothing and every egg in the shop was a blank square.
+                # ITEM_SPRITE has no "egg" entry, so asking for one returned
+                # nothing and every egg in the shop was a blank square.
                 sprite = self._egg_sprite()
                 tier = e.key.split(":")[1] if ":" in e.key else None
-                label = self._text(f"egg_name_{tier}" if tier else "egg_name")
-                description = (
-                    self._text("egg_desc_tier", self._text(tier)) if tier
-                    else self._text("egg_desc"))
-                badge = (tier or "").upper()
+                label, description, badge = self._egg_words(tier)
             out.append(
                 {
                     "key": e.key,
@@ -379,8 +427,8 @@ class CompanionStore:
                     "description": description,
                     "badge": badge,
                     # The tier as a catalogue key, so a front end shows "고급"
-                    # rather than "UNCOMMON". `badge` stays for anything still
-                    # reading it.
+                    # rather than "UNCOMMON". `badge` is the uppercase word and
+                    # is not translatable.
                     "rarity": tier if e.kind != "item" else None,
                     "sprite_path": sprite,
                     "emoji": {"rareCandy": "\N{CANDY}", "mint": "\N{HERB}",
@@ -392,28 +440,14 @@ class CompanionStore:
             )
         return out
 
-    def _item_description(self, key: str) -> str:
-        # The candy's figure comes from the balance constant rather than being
-        # written into the sentence, so the two cannot drift apart.
-        if key == "rareCandy":
-            return self._text("item_desc_rareCandy",
-                              _compact(balance.RARE_CANDY_XP))
-        return self._text(f"item_desc_{key}")
-
-    def _item_effect(self, key: str) -> str:
-        if key == "rareCandy":
-            return self._text("item_effect_rareCandy",
-                              _compact(balance.RARE_CANDY_XP))
-        return self._text(f"item_effect_{key}")
-
     def bag_payload(self) -> list[dict]:
         emoji = {"rareCandy": "\N{CANDY}", "mint": "\N{HERB}", "shinyCharm": "\N{SPARKLES}"}
         return [
             {
                 "key": key,
-                "label": self._text(f"item_{key}"),
-                "description": self._item_description(key),
-                "effect": self._item_effect(key),
+                "label": self._item_words(key)[0],
+                "description": self._item_words(key)[1],
+                "effect": self._item_words(key)[2],
                 "sprite_path": self._item_sprite(key),
                 "emoji": emoji.get(key, "?"),
                 "count": count,

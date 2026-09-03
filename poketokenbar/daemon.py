@@ -270,9 +270,8 @@ class Daemon:
                 # One language, not two. The catalogue reads config while the
                 # companion reads the save, so they must be kept in step or the
                 # popup renders half-translated.
-                self.companion_store.state.language = str(
-                    self.config_values.get("language", "en")
-                )
+                language = str(self.config_values.get("language", "en"))
+                self.companion_store.state.language = language
                 self.companion_store.update(
                     {pid: d.total_tokens for pid, d in daily_by_provider.items()}
                 )
@@ -302,6 +301,7 @@ class Daemon:
                             windows,
                             float(self.config_values.get("warn_threshold", 80)),
                             float(self.config_values.get("crit_threshold", 95)),
+                            language,
                         )
                 if self.notifier is not None and self.config_values.get(
                     "companion_notifications", True
@@ -309,7 +309,9 @@ class Daemon:
                     self.notifier.companion(
                         self.companion_store.last_events,
                         companion_payload.get("name"),
-                        self.companion_store.celebration,
+                        language,
+                        shiny=bool(companion_payload.get("is_shiny")),
+                        disguise=self.companion_store.disguise_name(),
                     )
                     self.companion_store.last_events = None
             except Exception as exc:
