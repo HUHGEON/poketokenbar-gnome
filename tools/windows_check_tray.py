@@ -27,7 +27,17 @@ def main() -> int:
 
     print(f"  tooltip : {tray.tray.toolTip()}")
     print(f"  menu    : {[action.text() for action in tray.tray.contextMenu().actions()]}")
-    print(f"  tabs    : {[window.tabs.tabText(i) for i in range(window.tabs.count())]}")
+    print(f"  tabs    : {[item.text() for item in window.tabs._buttons.values()]}")
+
+    # Every page has to build, not just the one that happens to be shown: a
+    # panel that raises on this platform would otherwise be found by whoever
+    # clicked the tab.
+    for name in window.panels:
+        window.show_tab(name)
+    window.show_settings()
+    window.show_tab("home")
+    print(f"  pages   : {list(window.panels)} + settings")
+
     # A tray entry with no icon is invisible, and then there is no way to open
     # the window at all.
     assert not tray.tray.icon().isNull(), "the tray icon is empty"

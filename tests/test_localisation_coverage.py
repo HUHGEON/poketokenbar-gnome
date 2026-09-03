@@ -137,6 +137,9 @@ def test_the_qt_panels_do_not_spell_out_english():
 
 
 def test_the_qt_settings_labels_are_all_catalogue_keys():
+    # The Qt front end is optional, and the job that runs without it still has
+    # every other check in this file to run.
+    pytest.importorskip("PySide6", reason="the Qt front end is optional")
     from poketokenbar.ui import panels
 
     keys = {label for _key, label in panels.SettingsPanel.TOGGLES}
