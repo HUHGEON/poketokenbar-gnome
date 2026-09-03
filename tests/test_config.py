@@ -47,3 +47,32 @@ def test_set_value_rejects_unknown_key(tmp_path):
 def test_set_value_rejects_uncoercible_value(tmp_path):
     with pytest.raises(ValueError):
         config.set_value(tmp_path / "config.json", "refresh_interval", "soon")
+
+
+def test_pet_position_survives_the_round_trip(tmp_path):
+    """config.load drops any key with no default, so a coordinate written by the
+    UI would vanish on the next read and the pet would jump home."""
+    path = tmp_path / "config.json"
+    config.set_value(path, "floating_pet_x", "640")
+    config.set_value(path, "floating_pet_y", "300")
+    values = config.load(path)
+    assert values["floating_pet_x"] == 640
+    assert values["floating_pet_y"] == 300
+
+
+def test_every_key_the_extension_writes_has_a_default():
+    """A key absent from DEFAULTS is accepted by the writer and dropped by the
+    reader, which is the quietest possible way for a setting to not work."""
+    import re
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parent.parent
+        / "gnome-extension" / "poketokenbar@huhgeon.github.io"
+    )
+    written = set()
+    for path in source.rglob("*.js"):
+        text = path.read_text(encoding="utf-8")
+        written.update(re.findall(r"""Config\.set\(\s*['"](\w+)['"]""", text))
+    unknown = written - set(config.DEFAULTS)
+    assert not unknown, f"extension writes settings with no default: {sorted(unknown)}"

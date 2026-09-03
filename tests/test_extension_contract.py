@@ -149,7 +149,7 @@ def test_the_extension_directory_is_where_the_tests_expect():
 # Every top-level key the extension may read off the parsed state.
 def top_level_reads() -> set[str]:
     found: set[str] = set()
-    pattern = re.compile(r"\bstate(?:\?)?\.(\w+)")
+    pattern = re.compile(_NOT_A_MEMBER + r"state(?:\?)?\.(\w+)")
     for code in source_code(strip_strings=True):
         found.update(pattern.findall(code))
     return found
@@ -165,6 +165,11 @@ def test_every_top_level_block_the_extension_reads_exists(payload):
 # MARK: per-block field names
 
 
+# The lookbehind keeps `Main.panel.addToStatusArea` from reading as a payload
+# access: the Shell's own panel shares the name with ours, and without it the
+# test fails on a line that is entirely correct.
+_NOT_A_MEMBER = r"(?<![.\w])"
+
 BLOCK_ACCESSORS = {
     "companion": r"companion(?:\?)?\.(\w+)",
     "today": r"today(?:\?)?\.(\w+)",
@@ -174,7 +179,7 @@ BLOCK_ACCESSORS = {
 
 
 def block_reads(expression: str) -> set[str]:
-    pattern = re.compile(r"\b" + expression)
+    pattern = re.compile(_NOT_A_MEMBER + expression)
     found: set[str] = set()
     for code in source_code(strip_strings=True):
         found.update(pattern.findall(code))
@@ -209,6 +214,7 @@ ROW_ACCESSORS = {
     "evoStage": "evo_line",
     "chainStage": "catch_chain",
     "limitWindow": "limit_window",
+    "panelWindow": "panel_window",
 }
 
 
@@ -218,6 +224,10 @@ def row_keys(name: str, payload: dict) -> set[str]:
         return set(payload["today"]["models"][0])
     if name == "limit_window":
         return set(payload["limits"]["session"])
+    if name == "panel_window":
+        # Deliberately separate from limit_window: the panel row carries text
+        # and a level already resolved, the popup row the raw utilisation.
+        return set(payload["panel"]["limit_windows"][0])
     if name == "evo_line":
         # The evolution line is only built when a sprite store is present, so a
         # stub stands in — the field names are what is being checked, not the
@@ -237,7 +247,7 @@ def row_keys(name: str, payload: dict) -> set[str]:
 
 @pytest.mark.parametrize("variable,block", sorted(ROW_ACCESSORS.items()))
 def test_row_fields_read_in_the_extension_exist(variable, block, payload):
-    pattern = rf"\b{variable}(?:\?)?\.(\w+)"
+    pattern = rf"{variable}(?:\?)?\.(\w+)"
     unknown = block_reads(pattern) - row_keys(block, payload)
     assert not unknown, (
         f"extension reads {variable}.{sorted(unknown)}; "

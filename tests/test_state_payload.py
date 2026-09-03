@@ -71,3 +71,20 @@ def test_provider_totals_are_preformatted():
     row = payload["providers"]["pi"]
     assert row["total_tokens_text"] == "1,234,567"
     assert "e+" not in row["total_tokens_compact"]
+
+
+def test_the_live_config_is_shipped():
+    """A preferences UI needs the current values; parsing config.json itself
+    would let the two drift the moment a default changes."""
+    payload = state.build({}, {"language": "ko", "floating_pet_size": 96}, [])
+    assert payload["config"]["language"] == "ko"
+    assert payload["config"]["floating_pet_size"] == 96
+
+
+def test_the_shipped_config_is_a_copy():
+    """The payload is serialised later; handing out the daemon's own dict would
+    let a mutation there rewrite an already-built snapshot."""
+    values = {"language": "en"}
+    payload = state.build({}, values, [])
+    values["language"] = "ko"
+    assert payload["config"]["language"] == "en"

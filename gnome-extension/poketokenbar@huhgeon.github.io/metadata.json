@@ -4,7 +4,6 @@
   "description": "Your AI coding tokens, hatched into Pokémon — in the GNOME panel. Reads local Claude Code, Codex, Gemini CLI, Cursor, Copilot and seven other tools' usage through the poketokend daemon.",
   "shell-version": ["45", "46", "47", "48", "49"],
   "url": "https://github.com/chattymin/PokeTokenBar",
-  "settings-schema": "org.gnome.shell.extensions.poketokenbar",
   "session-modes": ["user"],
   "version-name": "0.1.0"
 }

@@ -24,6 +24,11 @@ DEFAULTS: dict[str, object] = {
     "status_checks_enabled": True,
     "floating_pet_enabled": False,
     "floating_pet_size": 96,
+    # Where the desktop pet was last left. Stored here rather than in the UI's
+    # own settings so it survives a reinstall of the front end, and because
+    # config.load drops any key it has no default for.
+    "floating_pet_x": 80,
+    "floating_pet_y": 80,
     "floating_pet_bubble_alerts": True,
     "language": "en",
     # Extra scan folders, one raw string per provider id (comma/newline

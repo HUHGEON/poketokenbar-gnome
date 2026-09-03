@@ -167,6 +167,9 @@ def build(
         # actually survived. Counting their raw patterns instead would report a
         # folder as accepted when it had been dropped for swallowing a default.
         "settings": settings or {},
+        # The live config, so a preferences UI renders current values without
+        # parsing config.json itself and without the two drifting apart.
+        "config": dict(config_values),
         "panel": {
             "tokens_text": fmt.compact(total_tokens)
             if config_values.get("show_tokens_in_menu")

@@ -1,0 +1,212 @@
+/* PokeTokenBar styling.
+ *
+ * Colours come from the running theme wherever one exists, so the popup follows
+ * light and dark without a second palette to keep in step. The three state
+ * colours are the exception — "close to your limit" has to read as a warning in
+ * any theme, so those are stated outright.
+ */
+
+.poketokenbar-panel {
+  spacing: 4px;
+}
+
+.poketokenbar-panel-text {
+  font-size: 0.9em;
+}
+
+.poketokenbar-panel-limits {
+  spacing: 4px;
+}
+
+.poketokenbar-panel-sep {
+  opacity: 120;
+}
+
+/* Utilisation bands. Green/amber/red rather than theme colours: the meaning is
+   the point, and a theme that recoloured them would lose it. */
+.poketokenbar-ok {
+  color: #3fb950;
+}
+
+.poketokenbar-warn {
+  color: #d29922;
+}
+
+.poketokenbar-crit {
+  color: #f85149;
+  font-weight: bold;
+}
+
+/* --- popup ------------------------------------------------------------- */
+
+.poketokenbar-popup {
+  padding: 0;
+}
+
+.poketokenbar-content {
+  padding: 8px;
+  spacing: 6px;
+}
+
+.poketokenbar-scroll {
+  /* Bounded so a full Pokedex cannot grow the popup past the screen. */
+  max-height: 460px;
+}
+
+.poketokenbar-tabs {
+  spacing: 4px;
+  padding-bottom: 4px;
+}
+
+.poketokenbar-tab {
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.poketokenbar-tab:hover,
+.poketokenbar-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.poketokenbar-section {
+  spacing: 6px;
+}
+
+.poketokenbar-row {
+  spacing: 6px;
+}
+
+.poketokenbar-column {
+  spacing: 2px;
+}
+
+.poketokenbar-heading {
+  font-weight: bold;
+  padding-top: 6px;
+  opacity: 200;
+}
+
+.poketokenbar-title {
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.poketokenbar-key {
+  opacity: 200;
+}
+
+.poketokenbar-value {
+  font-feature-settings: "tnum";
+}
+
+.poketokenbar-subtle {
+  font-size: 0.85em;
+  opacity: 150;
+}
+
+.poketokenbar-status {
+  font-style: italic;
+  opacity: 180;
+  padding-top: 4px;
+}
+
+.poketokenbar-placeholder {
+  padding: 12px;
+  opacity: 150;
+}
+
+.poketokenbar-celebration {
+  font-weight: bold;
+  padding: 6px;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.poketokenbar-footer {
+  font-size: 0.8em;
+  opacity: 150;
+}
+
+.poketokenbar-actions {
+  spacing: 6px;
+  padding-top: 4px;
+}
+
+.poketokenbar-button {
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+.poketokenbar-card {
+  spacing: 8px;
+  padding: 6px;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* --- companion and collection -------------------------------------------- */
+
+.poketokenbar-companion-sprite {
+  padding: 4px;
+}
+
+.poketokenbar-evoline {
+  spacing: 8px;
+  padding: 4px 0;
+}
+
+.poketokenbar-meter {
+  height: 6px;
+  border-radius: 3px;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.poketokenbar-meter-fill {
+  height: 6px;
+  border-radius: 3px;
+  background-color: #3fb950;
+}
+
+.poketokenbar-meter-fill.poketokenbar-warn {
+  background-color: #d29922;
+}
+
+.poketokenbar-meter-fill.poketokenbar-crit {
+  background-color: #f85149;
+}
+
+.poketokenbar-dexrow {
+  spacing: 4px;
+}
+
+.poketokenbar-dexcell {
+  spacing: 0;
+}
+
+.poketokenbar-dexbutton {
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.poketokenbar-dexbutton:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.poketokenbar-dexnum {
+  font-size: 0.7em;
+  opacity: 150;
+}
+
+.poketokenbar-chain {
+  spacing: 2px;
+}
+
+/* --- desktop pet ---------------------------------------------------------- */
+
+.poketokenbar-pet-tooltip {
+  background-color: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.85em;
+}
