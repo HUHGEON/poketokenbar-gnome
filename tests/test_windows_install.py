@@ -203,6 +203,16 @@ def test_the_shortcuts_wear_the_app_icon():
     assert "poketokenbar.ico" in script
 
 
+def test_the_icon_is_copied_into_the_install():
+    """Only the package directory is copied, so an icon referenced where it
+    sits in the repo is one the shortcuts lose the moment the repo is deleted
+    — and a shortcut with a missing icon quietly wears the interpreter's."""
+    script = INSTALL.read_text(encoding="utf-8")
+    assert "Copy-Item -Force (Join-Path $PSScriptRoot 'poketokenbar.ico')" in script
+    assert "Join-Path $app 'packaging" not in script, (
+        "the icon is referenced where it is not installed")
+
+
 def test_the_icon_is_a_real_icon_file():
     """Committed rather than generated at install time, so installing needs no
     network for it — and a corrupt one would be a blank shortcut nobody

@@ -17,6 +17,13 @@ Write-Host "==> installing to $root"
 New-Item -ItemType Directory -Force -Path $app | Out-Null
 Copy-Item -Recurse -Force (Join-Path $repo 'poketokenbar') $app
 
+# The shortcut icon travels with the install: only the package directory is
+# copied, so an icon left in the repo is one the shortcuts cannot point at
+# once the repo is deleted — and a shortcut whose icon is missing silently
+# falls back to the interpreter's.
+$icon = Join-Path $root 'poketokenbar.ico'
+Copy-Item -Force (Join-Path $PSScriptRoot 'poketokenbar.ico') $icon
+
 Write-Host "==> creating venv"
 if (-not (Test-Path $venv)) { python -m venv $venv }
 $py = Join-Path $venv 'Scripts\python.exe'
@@ -60,7 +67,6 @@ foreach ($name in $launchers.Keys) {
 
 # The icon the shortcuts wear — the companion's own egg, built by
 # tools/make_icon.py and committed, so installing needs no network for it.
-$icon = Join-Path $app 'packaging\windows\poketokenbar.ico'
 if (-not (Test-Path $icon)) { $icon = $pyw }
 
 function New-Shortcut($path, $target, $iconPath) {
