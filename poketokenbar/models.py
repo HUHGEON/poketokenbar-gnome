@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 
@@ -38,6 +38,12 @@ class DailyUsage:
     cache_read_tokens: int = 0
     total_tokens: int = 0
     total_cost: float = 0.0
+    # Tokens per model id for the day. Upstream fills this for one opt-in
+    # provider; here every source records a real model id, so it is collected
+    # for all of them and the UI decides when a breakdown is worth showing.
+    # A per-provider opt-in would be exactly the kind of id-keyed branch the
+    # extension rules keep out of shared aggregation.
+    models: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

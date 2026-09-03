@@ -46,6 +46,32 @@ def _limits_payload(status) -> dict:
     }
 
 
+def _combined_models(daily_by_provider: dict) -> dict[str, int]:
+    combined: dict[str, int] = {}
+    for daily in daily_by_provider.values():
+        for name, tokens in daily.models.items():
+            combined[name] = combined.get(name, 0) + tokens
+    return combined
+
+
+def _model_rows(models: dict[str, int]) -> list[dict]:
+    """Biggest first, so the popover reads top-down without sorting again.
+
+    Ties break on the model name to keep the order stable between polls —
+    otherwise two equal models would swap places on every refresh.
+    """
+    return [
+        {
+            "model": name,
+            "total_tokens": tokens,
+            "total_tokens_text": fmt.grouped(tokens),
+            "total_tokens_compact": fmt.compact(tokens),
+        }
+        for name, tokens in sorted(models.items(), key=lambda kv: (-kv[1], kv[0]))
+        if tokens > 0
+    ]
+
+
 def build(
     daily_by_provider: dict[str, DailyUsage],
     config_values: dict,
@@ -80,6 +106,9 @@ def build(
             "tokens_grouped": fmt.grouped(total_tokens),
             "tokens_compact": fmt.compact(total_tokens),
             "cost_text": fmt.cost(total_cost),
+            # Across every provider, so a day spent on one model through two
+            # tools still reads as one row.
+            "models": _model_rows(_combined_models(daily_by_provider)),
         },
         "providers": {
             pid: {
@@ -93,6 +122,10 @@ def build(
                 "output_tokens": d.output_tokens,
                 "cache_creation_tokens": d.cache_creation_tokens,
                 "cache_read_tokens": d.cache_read_tokens,
+                # One session log can carry several models — Pi and its forks
+                # route them all through one file — so the day is broken down
+                # by the model that actually answered.
+                "models": _model_rows(d.models),
             }
             for pid, d in daily_by_provider.items()
         },

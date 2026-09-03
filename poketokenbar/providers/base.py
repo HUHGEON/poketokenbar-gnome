@@ -317,6 +317,7 @@ class ScanningProvider:
             daily.cache_creation_tokens += e.cache_write
             daily.cache_read_tokens += e.cache_read
             daily.total_cost += self.cost_of(e)
+            daily.models[e.model] = daily.models.get(e.model, 0) + e.total
         daily.total_tokens = (
             daily.input_tokens
             + daily.output_tokens
