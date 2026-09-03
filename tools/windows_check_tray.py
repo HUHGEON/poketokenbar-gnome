@@ -41,7 +41,38 @@ def main() -> int:
     # A tray entry with no icon is invisible, and then there is no way to open
     # the window at all.
     assert not tray.tray.icon().isNull(), "the tray icon is empty"
+
+    check_pet(tray)
     return 0
+
+
+def check_pet(tray) -> None:
+    """The pet survives being clicked.
+
+    Clicking it opens the popup, and on Windows a tool window is owned by
+    whichever window of the application was last active — so a pet that took
+    activation became owned by the popup and disappeared with it. Nothing here
+    can see that happen, but the flags that prevent it and the reassert that
+    recovers from it are checked, and the click path runs on the platform it
+    goes wrong on.
+    """
+    from PySide6.QtCore import Qt
+
+    state = {"panel": {"sprite_path": ""},
+             "config": {"floating_pet_enabled": True, "floating_pet_size": 96,
+                        "floating_pet_x": 40, "floating_pet_y": 40}}
+    tray._sync_pet(state)
+    pet = tray.pet
+    assert pet is not None, "the pet was not created"
+    flags = pet.windowFlags()
+    assert flags & Qt.WindowDoesNotAcceptFocus, "the pet can take activation"
+    assert pet.testAttribute(Qt.WA_ShowWithoutActivating), "showing it activates it"
+
+    tray.toggle_window()
+    tray.toggle_window()
+    tray._sync_pet(state)
+    assert tray.pet is not None and tray.pet.isVisible(), "the pet went away"
+    print(f"  pet     : survives a click, glyph {pet.sprite.text()!r}")
 
 
 if __name__ == "__main__":

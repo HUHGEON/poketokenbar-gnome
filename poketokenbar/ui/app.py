@@ -329,8 +329,15 @@ class TrayApp:
                 int(config_values.get("floating_pet_y") or 80),
             )
             self.pet.show()
-        else:
-            self.pet.update_state(state)
+            return
+
+        self.pet.update_state(state)
+        # Anything that hid it — a compositor, a session change, a window
+        # manager reacting to the popup — used to be permanent: the pet still
+        # existed, so nothing here ever showed it again and it was gone until
+        # the app restarted. Unconditional, because a window the platform hid
+        # still reports itself visible.
+        self._reassert_pet()
 
     def _remember_pet_position(self, x: int, y: int) -> None:
         # Through the daemon's own config, so the pet comes back where it was
@@ -445,11 +452,24 @@ class TrayApp:
     def toggle_window(self) -> None:
         if self.window.isVisible():
             self.window.hide()
+        else:
+            self.window.refresh(self.reader.state)
+            self.window.show()
+            self.window.raise_()
+            self.window.activateWindow()
+        self._reassert_pet()
+
+    def _reassert_pet(self) -> None:
+        """Put the pet back on top after the popup has come or gone.
+
+        Qt cannot see a window the platform hid on its own — isVisible() still
+        reports true — so this does not check first. Showing a window that is
+        already showing costs nothing.
+        """
+        if self.pet is None:
             return
-        self.window.refresh(self.reader.state)
-        self.window.show()
-        self.window.raise_()
-        self.window.activateWindow()
+        self.pet.show()
+        self.pet.raise_()
 
 
 def main(argv: list[str] | None = None) -> int:

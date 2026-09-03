@@ -244,3 +244,9 @@
 .poketokenbar-dexstar-on {
     color: #ff9f0a;
 }
+
+/* Stands in for the pet before any sprite has been fetched. Without it the
+   actor draws nothing, which looks exactly like the pet having disappeared. */
+.poketokenbar-pet-glyph {
+    font-size: 48px;
+}

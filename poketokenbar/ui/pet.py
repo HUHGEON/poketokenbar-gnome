@@ -24,6 +24,9 @@ CLICK_SLOP = 4
 
 DEFAULT_SIZE = 96
 
+# Shown until a sprite has been fetched even once.
+FALLBACK_GLYPH = "\N{EGG}"
+
 
 class DesktopPet(QWidget):
     def __init__(self, on_activate=None, on_moved=None) -> None:
@@ -33,6 +36,11 @@ class DesktopPet(QWidget):
         self._press: QPoint | None = None
         self._dragging = False
         self._tooltip_text = ""
+        # The last path that actually resolved to a file. A sprite the daemon
+        # could not download comes through as "", and drawing that meant an
+        # invisible window — so the pet vanished and came back as the network
+        # flapped, which is the same thing as "it keeps disappearing".
+        self._last_sprite = ""
 
         self.setWindowFlags(
             Qt.FramelessWindowHint
@@ -40,8 +48,18 @@ class DesktopPet(QWidget):
             # Keeps it off the taskbar and out of Alt-Tab: it is an ornament,
             # not a window someone switches to.
             | Qt.Tool
+            # And it must never become the active window. Windows owns a tool
+            # window to whichever window of the application was last active, so
+            # a pet that takes activation on click becomes owned by the popup —
+            # and vanishes with it the moment the popup is closed again. That
+            # is the "it disappears when I click it" report.
+            | Qt.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
+        # Same reason, for the show() that follows: showing a window normally
+        # activates it.
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setFocusPolicy(Qt.NoFocus)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -59,8 +77,17 @@ class DesktopPet(QWidget):
     def update_state(self, state: dict | None) -> None:
         panel = (state or {}).get("panel") or {}
         # Follows the panel, so a pinned species shows here too — the daemon has
-        # already resolved which one that is.
-        self.sprite.set_path(panel.get("sprite_path") or None)
+        # already resolved which one that is. An empty path is a fetch that has
+        # not succeeded yet, never a decision to show nothing, so the last one
+        # that worked stays up rather than the pet blanking.
+        path = panel.get("sprite_path") or ""
+        if path:
+            self._last_sprite = path
+        # Before the first sprite ever arrives — a fresh install with no
+        # network — the glyph is what stands in. An empty translucent window
+        # is indistinguishable from the pet being gone.
+        self.sprite.set_fallback(FALLBACK_GLYPH)
+        self.sprite.set_path(self._last_sprite or None)
 
         config = (state or {}).get("config") or {}
         size = int(config.get("floating_pet_size") or DEFAULT_SIZE)

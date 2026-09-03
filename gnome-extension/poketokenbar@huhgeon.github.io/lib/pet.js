@@ -46,6 +46,15 @@ class DesktopPet extends St.Widget {
 
         this._dragging = false;
         this._pressPoint = null;
+        // The last path that actually resolved to a file. A sprite the daemon
+        // could not download arrives as an empty string, and an actor with no
+        // frames hides itself — so the pet vanished and came back as the
+        // fetch succeeded or failed, which reads as "it keeps disappearing".
+        this._lastSprite = null;
+        // Stands in until a sprite has been fetched even once: an actor that
+        // draws nothing is indistinguishable from the pet being gone.
+        this._glyph = new St.Label({style_class: 'poketokenbar-pet-glyph', text: '🥚'});
+        this.add_child(this._glyph);
 
         this.connect('button-press-event', (_a, event) => this._onPress(event));
         this.connect('motion-event', (_a, event) => this._onMotion(event));
@@ -65,8 +74,14 @@ class DesktopPet extends St.Widget {
     }
 
     update(state) {
-        // The pet follows the panel, so a pinned species shows here too.
-        this._sprite.setPath(state?.panel?.sprite_path || null);
+        // The pet follows the panel, so a pinned species shows here too. An
+        // empty path is a fetch that has not succeeded yet, never a decision
+        // to show nothing, so the last one that worked stays up.
+        const path = state?.panel?.sprite_path || null;
+        if (path)
+            this._lastSprite = path;
+        this._sprite.setPath(this._lastSprite);
+        this._glyph.visible = !this._lastSprite;
         // Both always-visible surfaces share one setting, as they do upstream.
         this._sprite.setQuality(state?.config?.animation_quality ?? DEFAULT_QUALITY);
         this._tooltipText = state?.today?.tokens_grouped ?? '';
