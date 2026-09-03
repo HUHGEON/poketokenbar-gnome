@@ -829,7 +829,45 @@ class SettingsPanel(Panel):
             self.add(heading(self.t("setting_scan_folders")))
             self.add(self._group([self._roots_row(p) for p in providers]))
 
+        self.add(self._update_row(state))
         self.add(self._about())
+
+    def _update_row(self, state: dict | None) -> QWidget:
+        """Whether a newer commit is published, and a button to take it.
+
+        Reinstalling meant finding the repo again and running a script, which
+        is enough friction that a fix nobody installs may as well not exist.
+        """
+        update = (state or {}).get("update") or {}
+        if not update.get("supported"):
+            return label(self.t("update_unsupported"), faint=True, size=11, wrap=True)
+
+        if update.get("available"):
+            control = button(
+                self.t("update_now"),
+                lambda _=False: commands.enqueue("update", {}),
+            )
+            title = self.t("update_available")
+            subtitle = f"{update.get('installed_short', '')} → {update['available_short']}"
+        else:
+            # Restarting is the tray's own doing: the daemon has already
+            # replaced the source and re-executed itself, but this process is
+            # still running the code it started with.
+            control = button(self.t("restart"), lambda _=False: _restart_tray())
+            title = self.fill("update_current", update.get("installed_short", "?"))
+            subtitle = update.get("error", "")
+
+        holder = QWidget()
+        layout = QHBoxLayout(holder)
+        layout.setContentsMargins(12, 9, 12, 9)
+        layout.setSpacing(10)
+        layout.addWidget(column(
+            label(title),
+            *([label(subtitle, faint=True, size=11)] if subtitle else []),
+            spacing=2))
+        layout.addStretch(1)
+        layout.addWidget(control)
+        return card(holder, horizontal=False, padding=0, spacing=0)
 
     def _about(self) -> QWidget:
         """Version and where to go from here — the sheet's footer.
@@ -991,6 +1029,14 @@ class SettingsPanel(Panel):
 
 
 # --- small controls --------------------------------------------------------
+
+
+def _restart_tray() -> None:
+    """Re-exec this process so it runs the source the daemon just installed."""
+    import os
+    import sys
+
+    os.execv(sys.executable, [sys.executable, "-m", "poketokenbar.ui.app"])
 
 
 def _faded():

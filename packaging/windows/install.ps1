@@ -24,6 +24,16 @@ Copy-Item -Recurse -Force (Join-Path $repo 'poketokenbar') $app
 $icon = Join-Path $root 'poketokenbar.ico'
 Copy-Item -Force (Join-Path $PSScriptRoot 'poketokenbar.ico') $icon
 
+# Which commit this install came from, so the app can tell whether GitHub has a
+# newer one without carrying a git checkout around. Unknown is written as empty
+# rather than guessed: an install that cannot say what it is must not be
+# offered an update it cannot verify is newer.
+$revision = ''
+try { $revision = (& git -C $repo rev-parse HEAD 2>$null) } catch { }
+if ($LASTEXITCODE -ne 0) { $revision = '' }
+[IO.File]::WriteAllText((Join-Path $app 'REVISION'), "$revision".Trim())
+Write-Host "    revision $(if ($revision) { $revision.Trim() } else { 'unknown' })"
+
 Write-Host "==> creating venv"
 if (-not (Test-Path $venv)) { python -m venv $venv }
 $py = Join-Path $venv 'Scripts\python.exe'

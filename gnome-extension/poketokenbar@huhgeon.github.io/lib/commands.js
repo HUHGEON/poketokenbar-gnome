@@ -73,3 +73,11 @@ export const represent = speciesId =>
     enqueue('represent', {species_id: speciesId === null ? 'none' : String(speciesId)});
 export const exportSave = path => enqueue('export', {path});
 export const importSave = path => enqueue('import', {path});
+
+/** Ask the daemon to replace the installed source with the branch head.
+ *
+ * The daemon does the work rather than the extension: it is the half that is
+ * always running, and the swap must not race two processes rewriting the same
+ * directory.
+ */
+export const update = () => enqueue('update', {});

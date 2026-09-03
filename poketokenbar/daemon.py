@@ -9,6 +9,7 @@ from pathlib import Path
 from . import commands, config, platform_paths, state
 from .companion_store import CompanionStore
 from . import autostart
+from . import updater as updater_module
 from . import burn as burn_module
 from .burn import BurnTracker
 
@@ -39,7 +40,7 @@ class Daemon:
     def __init__(
         self, state_path: Path, config_path: Path, cache, providers,
         limits_source=None, companion_store=None, notifier=None,
-        burn_tracker=None, status_checker=None,
+        burn_tracker=None, status_checker=None, updater=None,
     ) -> None:
         self.state_path = state_path
         self.config_path = config_path
@@ -50,6 +51,7 @@ class Daemon:
         self.companion_store = companion_store
         self.notifier = notifier
         self.burn = burn_tracker
+        self.updater = updater
         # Which account the last limits belonged to. Switching accounts changes
         # what the percentages mean, so cached limits and burn history from the
         # previous account must not carry over.
@@ -100,6 +102,20 @@ class Daemon:
         payload["session"] = row
         return payload
 
+    def _update_payload(self, errors: list[str]) -> dict:
+        """Whether a newer commit is published. Never fatal.
+
+        A machine with no network has to behave exactly like one that is up to
+        date: an update banner is not worth an error in the panel.
+        """
+        if self.updater is None:
+            return {"supported": False}
+        try:
+            self.updater.check()
+        except Exception as exc:  # pragma: no cover - check() swallows its own
+            errors.append(f"update check: {exc}")
+        return self.updater.payload()
+
     def settings_payload(self) -> dict:
         """Provider rows for the settings page, with live extra-folder counts."""
         from . import scan_roots
@@ -128,6 +144,21 @@ class Daemon:
                 # Manual refresh: drop cached limits so the next fetch is live.
                 if self.limits_source is not None:
                     self.limits_source.invalidate()
+            elif name == "update":
+                # Applied by the daemon, not the tray: it is the half that is
+                # always running, and the swap must not race two processes
+                # rewriting the same directory.
+                if self.updater is None:
+                    errors.append("update: not an installed copy")
+                else:
+                    try:
+                        revision = self.updater.apply()
+                        message = f"updated to {revision[:7]}"
+                        if self.notifier is not None:
+                            self.notifier._send("PokeTokenBar", message)
+                        self._pending_restart = True
+                    except Exception as exc:
+                        errors.append(f"update: {exc}")
             elif name == "reload_config":
                 self.config_values = config.load(self.config_path)
                 # The login entry is a file on disk, so the setting only means
@@ -312,8 +343,14 @@ class Daemon:
             provider_status=status_payload,
             celebration=self.companion_store.celebration if self.companion_store else None,
             settings=self.settings_payload(),
+            update=self._update_payload(errors),
         )
         state.write(self.state_path, payload)
+        if getattr(self, "_pending_restart", False):
+            # After the write, so the tray reads the new revision and can offer
+            # to restart itself too. execv never returns.
+            self._pending_restart = False
+            updater_module.restart_self()
         # Cleared after publishing so the banner shows once rather than
         # persisting until the next hatch.
         if self.companion_store is not None:
@@ -354,6 +391,7 @@ def main() -> int:
         notifier=Notifier(),
         burn_tracker=BurnTracker(),
         status_checker=StatusChecker(),
+        updater=updater_module.Updater(),
     )
     # The daemon owns the live config, so it is what answers the providers'
     # extra-folders lookup — reading it per call, not once at startup.

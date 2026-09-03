@@ -522,6 +522,37 @@ STRINGS: dict[str, tuple[str, ...]] = {
         "Você achava que era %1 — era um Ditto o tempo todo!",
         "Du dachtest, es wäre %1 – dabei war es die ganze Zeit Ditto!",
     ),
+    # --- updating --------------------------------------------------------
+    "update": ("Update", "업데이트", "アップデート", "Actualizar", "Mise à jour",
+               "Atualizar", "Aktualisieren"),
+    "update_available": (
+        "A new version is available", "새 버전이 있어요", "新しいバージョンがあります",
+        "Hay una versión nueva", "Une nouvelle version est disponible",
+        "Há uma versão nova", "Eine neue Version ist verfügbar",
+    ),
+    "update_current": (
+        "Up to date (%1)", "최신 버전이에요 (%1)", "最新です（%1）",
+        "Está actualizado (%1)", "À jour (%1)", "Está atualizado (%1)",
+        "Aktuell (%1)",
+    ),
+    "update_now": ("Update now", "지금 업데이트", "今すぐ更新", "Actualizar ahora",
+                   "Mettre à jour", "Atualizar agora", "Jetzt aktualisieren"),
+    "update_restart": (
+        "Restart to finish", "다시 시작하면 적용돼요", "再起動で反映されます",
+        "Reinicia para terminar", "Redémarre pour terminer",
+        "Reinicie para concluir", "Zum Abschluss neu starten",
+    ),
+    "restart": ("Restart", "다시 시작", "再起動", "Reiniciar", "Redémarrer",
+                "Reiniciar", "Neu starten"),
+    "update_unsupported": (
+        "Installed from a checkout — update it with git",
+        "체크아웃에서 실행 중 — git으로 업데이트하세요",
+        "チェックアウトから実行中 — git で更新してください",
+        "Ejecutando desde un checkout: actualiza con git",
+        "Lancé depuis un checkout — mets-le à jour avec git",
+        "Rodando de um checkout — atualize com git",
+        "Läuft aus einem Checkout — mit git aktualisieren",
+    ),
     "weekly_model": (
         "Weekly %1", "주간 %1", "週間 %1", "Semanal %1", "Hebdo %1", "Semanal %1",
         "%1 – wöchentlich",

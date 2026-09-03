@@ -76,6 +76,8 @@ def full_payload() -> dict:
         periods={"week": {"tokens": 1, "cost": 0.0}, "month": {"tokens": 2, "cost": 0.0}},
         burn={"session": {"rate_per_minute": 1.0, "minutes_to_full": 5,
                           "eta_text": "x", "before_reset": False}},
+        update={"supported": True, "installed": "a" * 40, "installed_short": "aaaaaaa",
+                "available": "b" * 40, "available_short": "bbbbbbb", "error": ""},
         blocks={"claude_code": BlockUsage(
             id="b", start_time="2026-09-03T00:00:00+00:00",
             end_time="2026-09-03T05:00:00+00:00", is_active=True,
@@ -252,6 +254,7 @@ ROW_ACCESSORS = {
     "block": "active_block",
     "providerStatus": "provider_status",
     "config": "config",
+    "update": "update",
 }
 
 
@@ -271,6 +274,8 @@ def row_keys(name: str, payload: dict) -> set[str]:
         return set(payload["provider_status"]["anthropic"])
     if name == "settings_provider":
         return set(payload["settings"]["providers"][0])
+    if name == "update":
+        return set(payload["update"])
     if name == "config":
         # Not the fixture's config, which is a stub: the real defaults, because
         # config.load drops any key that has no default and the setting would

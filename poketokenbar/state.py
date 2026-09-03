@@ -144,6 +144,7 @@ def build(
     blocks: dict | None = None,
     celebration: dict | None = None,
     settings: dict | None = None,
+    update: dict | None = None,
 ) -> dict:
     total_tokens = sum(d.total_tokens for d in daily_by_provider.values())
     total_cost = sum(d.total_cost for d in daily_by_provider.values())
@@ -229,6 +230,10 @@ def build(
         # actually survived. Counting their raw patterns instead would report a
         # folder as accepted when it had been dropped for swallowing a default.
         "settings": settings or {},
+        # Whether a newer commit is published, and which one is installed. Only
+        # an installed copy answers; a git checkout reports unsupported, since
+        # overwriting one would throw away whatever is being worked on.
+        "update": update or {"supported": False},
         # The live config, so a preferences UI renders current values without
         # parsing config.json itself and without the two drifting apart.
         "config": dict(config_values),

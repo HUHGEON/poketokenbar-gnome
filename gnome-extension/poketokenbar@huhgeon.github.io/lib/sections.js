@@ -603,6 +603,33 @@ class SettingsSection extends Section {
             'poketokenbar-subtle'));
 
         this._addScanFolders(state);
+        this._addUpdate(state);
+    }
+
+    /** Whether a newer commit is published, and a button to take it.
+     *
+     * Reinstalling meant finding the repo again and running a script, which is
+     * enough friction that a fix nobody installs may as well not exist.
+     */
+    _addUpdate(state) {
+        const t = key => this._reader.text(key);
+        const update = state?.update ?? {};
+        this.add_child(heading(t('update')));
+        if (!update.supported) {
+            this.add_child(label(t('update_unsupported'), 'poketokenbar-subtle'));
+            return;
+        }
+        if (update.available) {
+            this.add_child(label(t('update_available'), 'poketokenbar-key'));
+            this.add_child(label(
+                `${update.installed_short ?? ''} \u2192 ${update.available_short}`,
+                'poketokenbar-subtle'));
+            this.add_child(button(t('update_now'), () => Commands.update()));
+            return;
+        }
+        this.add_child(label(
+            t('update_current').replace('%1', update.installed_short ?? '?'),
+            'poketokenbar-subtle'));
     }
 
     _addToggle(key, stringKey, config) {
