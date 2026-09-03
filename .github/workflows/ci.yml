@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [gnome, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The JavaScript checks shell out to node, which parses the same ESM
+      # grammar GJS does. Without it those tests skip and a syntax error in the
+      # extension reaches a release.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: pip install pytest
+
+      - name: Tests
+        run: python -m pytest -q
+
+      - name: The JavaScript checks actually ran
+        # A skip here is indistinguishable from a pass in the summary, and the
+        # whole point of them is that nothing else covers the extension.
+        run: |
+          python -m pytest -q tests/test_extension_syntax.py -rs 2>&1 | tee out.txt
+          grep -q "skipped" out.txt && { echo "node checks were skipped"; exit 1; } || true
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install into a scratch home
+        # systemd is not available on a runner, and the daemon is started by the
+        # step below instead.
+        env:
+          POKETOKENBAR_NO_SERVICE: '1'
+          POKETOKENBAR_UI: gnome
+        run: ./install.sh
+      - name: The daemon runs and writes a state file
+        run: |
+          PYTHONPATH="$HOME/.local/share/poketokenbar/app" \
+            "$HOME/.local/share/poketokenbar/venv/bin/python" - <<'PY'
+          from pathlib import Path
+          from poketokenbar import config, providers, state
+          from poketokenbar.daemon import Daemon
+
+          daemon = Daemon(state_path=state.default_path(),
+                          config_path=config.default_path(),
+                          cache=None, providers=[])
+          daemon.providers = providers.build(custom_roots=daemon.custom_scan_roots)
+          state.write(daemon.state_path, daemon.poll_once())
+          written = Path(state.default_path())
+          assert written.is_file(), "the daemon wrote no state file"
+          print(f"wrote {written} ({written.stat().st_size} bytes)")
+          PY
+      - name: poketokenctl works
+        run: |
+          "$HOME/.local/bin/poketokenctl" refresh
+          "$HOME/.local/bin/poketokenctl" scan-roots gemini /tmp/example
+          cat "$HOME/.config/poketokenbar/config.json"
