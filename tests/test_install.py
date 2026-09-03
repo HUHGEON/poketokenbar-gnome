@@ -8,6 +8,7 @@ nothing those two checks do not already cover.
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -30,6 +31,7 @@ def test_the_script_parses():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.skipif(os.name == "nt", reason="NTFS carries no execute bit")
 def test_it_is_executable():
     """Cloned and run as ./install.sh, a missing bit is the first thing anyone hits."""
     assert INSTALL.stat().st_mode & 0o111, "install.sh is not executable"

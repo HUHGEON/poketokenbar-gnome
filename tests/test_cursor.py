@@ -93,9 +93,22 @@ def test_nonexistent_store_is_silent(tmp_path):
     assert cursor.parse_database(tmp_path / "absent.vscdb") == []
 
 
+def store_root(tmp_path, flavour="Cursor"):
+    """Where the provider will actually look on this platform.
+
+    Hardcoding `.config/...` made these pass on Linux and fail on Windows, where
+    the same provider looks under %APPDATA%. Asking the provider is the only
+    version that is true everywhere.
+    """
+    for candidate in cursor.user_data_dirs(home=tmp_path, env={}):
+        if candidate.name == "globalStorage" and flavour in str(candidate):
+            return candidate
+    raise AssertionError(f"no {flavour} directory in user_data_dirs")
+
+
 def test_cursor_reports_no_cost(tmp_path):
     """Included-plan usage is billed by request; the dashboard is token-only."""
-    root = tmp_path / ".config" / "Cursor" / "User" / "globalStorage"
+    root = store_root(tmp_path)
     root.mkdir(parents=True)
     write_store(root / "state.vscdb", [("bubbleId:b", bubble(input=1_000_000, output=1_000_000))])
     provider = cursor.CursorProvider(home=tmp_path)
@@ -152,9 +165,8 @@ def test_cursor_data_dir_overrides_every_platform(tmp_path):
 
 
 def test_nightly_is_scanned_alongside_stable(tmp_path):
-    base = tmp_path / ".config"
     for flavour in ("Cursor", "Cursor Nightly"):
-        root = base / flavour / "User" / "globalStorage"
+        root = store_root(tmp_path, flavour)
         root.mkdir(parents=True)
         write_store(root / "state.vscdb", [(f"bubbleId:{flavour}", bubble())])
     assert len(cursor.CursorProvider(home=tmp_path).scan_entries()) == 2

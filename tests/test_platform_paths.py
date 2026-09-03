@@ -125,11 +125,19 @@ def test_windows_ignores_the_xdg_variables():
      paths.runtime_base],
 )
 def test_every_base_resolves_on_every_platform(function, system):
-    """No combination may return None or a relative path: both would land the
-    daemon's files somewhere nobody can find them."""
+    """No combination may return None or an empty path.
+
+    Absoluteness is deliberately not asserted: `Path` means the *running*
+    platform's flavour, so a POSIX-shaped result is not absolute when this test
+    runs on Windows, and a C: path is not absolute when it runs on Linux. The
+    property that holds everywhere is that the result is rooted at something
+    that was given to it.
+    """
     result = function(HOME, {}, system)
     assert isinstance(result, Path)
-    assert result.is_absolute() or str(result)[1:3] == ":/", result
+    text = str(result)
+    assert text and text not in (".", "")
+    assert text.startswith(str(HOME)) or text.startswith("/"), result
 
 
 def test_an_empty_override_is_ignored_not_obeyed():

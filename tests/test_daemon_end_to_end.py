@@ -148,10 +148,16 @@ def test_a_poll_reads_four_providers_at_once_and_writes_state(fake_home):
     assert payload["today"]["total_tokens"] == 3150
 
 
-def test_the_state_file_lands_on_the_xdg_state_path(fake_home):
+def test_the_state_file_lands_where_the_platform_puts_state(fake_home):
+    """Compared against platform_paths rather than a literal: the XDG layout is
+    Linux's answer, and the same daemon runs on three platforms."""
+    from poketokenbar import platform_paths
+
     seed_logs(fake_home)
     daemon, _ = run_one_poll(fake_home)
-    assert daemon.state_path == fake_home / ".local" / "state" / "poketokenbar" / "state.json"
+    assert daemon.state_path == (
+        platform_paths.state_base() / "poketokenbar" / "state.json"
+    )
     assert daemon.state_path.is_file()
 
 
