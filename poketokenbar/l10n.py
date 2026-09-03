@@ -171,6 +171,36 @@ STRINGS: dict[str, tuple[str, ...]] = {
     "at_this_rate": ("at this rate, full at %1", "이 속도면 %1 에 도달", "このペースだと %1 に到達", "a este ritmo, lleno a las %1",
         'à ce rythme, plein à %1', 'neste ritmo, cheio às %1', 'in diesem Tempo voll um %1',
     ),
+    # settings
+    #
+    # One row per switch. They used to borrow whichever label came closest —
+    # three switches read "Limits (official)" and two read "Raising" — which
+    # made the settings list a column of duplicates, and the desktop pet a
+    # switch nobody could find.
+    "setting_tokens_in_panel": ("Tokens in the panel", "패널에 토큰 표시", "パネルにトークン表示", "Tokens en el panel",
+        'Jetons dans le panneau', 'Tokens no painel', 'Tokens in der Leiste',
+    ),
+    "setting_cost_in_panel": ("Cost in the panel", "패널에 비용 표시", "パネルに費用表示", "Coste en el panel",
+        'Coût dans le panneau', 'Custo no painel', 'Kosten in der Leiste',
+    ),
+    "setting_limits_in_panel": ("Limits in the panel", "패널에 한도 표시", "パネルに上限表示", "Límites en el panel",
+        'Limites dans le panneau', 'Limites no painel', 'Limits in der Leiste',
+    ),
+    "setting_limit_notifications": ("Notify on limit warnings", "한도 경고 알림", "上限の警告を通知", "Avisar de los límites",
+        'Alerter sur les limites', 'Avisar sobre os limites', 'Bei Limit-Warnungen benachrichtigen',
+    ),
+    "setting_companion_notifications": ("Notify on companion events", "포켓몬 소식 알림", "ポケモンの出来事を通知", "Avisar del compañero",
+        'Alerter sur le compagnon', 'Avisar sobre o companheiro', 'Bei Begleiter-Ereignissen benachrichtigen',
+    ),
+    "setting_status_checks": ("Check provider status", "서비스 상태 확인", "サービス状態を確認", "Comprobar estado del servicio",
+        'Vérifier l\'état des services', 'Verificar o estado dos serviços', 'Dienststatus prüfen',
+    ),
+    "setting_desktop_pet": ("Desktop pet", "바탕화면에 포켓몬 띄우기", "デスクトップに表示", "Mascota en el escritorio",
+        'Mascotte sur le bureau', 'Mascote na área de trabalho', 'Begleiter auf dem Desktop',
+    ),
+    "setting_pet_bubbles": ("Pet speech bubbles", "포켓몬 말풍선", "ふきだしで知らせる", "Bocadillos de la mascota",
+        'Bulles de la mascotte', 'Balões de fala do mascote', 'Sprechblasen des Begleiters',
+    ),
 }
 
 _INDEX = {code: i for i, code in enumerate(LANGUAGES)}

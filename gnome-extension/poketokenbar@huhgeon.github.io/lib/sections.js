@@ -512,15 +512,20 @@ class CollectionSection extends Section {
 // Declared rather than passed inline so a test can check every one of them
 // against the daemon's own defaults: config.load drops a key it has no default
 // for, which makes a wrong name here a switch that flips and does nothing.
+// A switch is only as good as its label, and these borrowed theirs from
+// whichever catalogue entry came closest: three of them read "Limits
+// (official)" and two read "Raising", so the list was a column of duplicates
+// and the desktop pet was a switch nobody could pick out. They have their own
+// strings now.
 const TOGGLES = [
-    {key: 'show_tokens_in_menu', string: 'todays_tokens'},
-    {key: 'show_cost_in_menu', string: 'price'},
-    {key: 'show_limit_in_menu', string: 'limits_official'},
-    {key: 'limit_notifications', string: 'limits_official'},
-    {key: 'companion_notifications', string: 'raising'},
-    {key: 'status_checks_enabled', string: 'refresh'},
-    {key: 'floating_pet_enabled', string: 'raising'},
-    {key: 'floating_pet_bubble_alerts', string: 'limits_official'},
+    {key: 'show_tokens_in_menu', string: 'setting_tokens_in_panel'},
+    {key: 'show_cost_in_menu', string: 'setting_cost_in_panel'},
+    {key: 'show_limit_in_menu', string: 'setting_limits_in_panel'},
+    {key: 'limit_notifications', string: 'setting_limit_notifications'},
+    {key: 'companion_notifications', string: 'setting_companion_notifications'},
+    {key: 'status_checks_enabled', string: 'setting_status_checks'},
+    {key: 'floating_pet_enabled', string: 'setting_desktop_pet'},
+    {key: 'floating_pet_bubble_alerts', string: 'setting_pet_bubbles'},
 ];
 
 // Numeric settings, as a stepper rather than a text field: every one of these
