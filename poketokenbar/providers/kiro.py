@@ -16,14 +16,15 @@ The estimate is cumulative on purpose: a turn's input is the whole conversation
 so far plus this prompt, because that is what Kiro actually resends. Text from
 turns that are themselves skipped still accumulates into that running total.
 
-**Path remapping.** The SQLite store is the second of the two locations that
-genuinely move — it is an app-support directory, not a dotfile:
+**Path remapping.** The SQLite store is an application-data directory rather
+than a dotfile, so it moves with the platform:
 
     macOS    ~/Library/Application Support/kiro-cli
-    Linux    $XDG_DATA_HOME/kiro-cli  (~/.local/share/kiro-cli)
+    Linux    $XDG_DATA_HOME/kiro-cli
+    Windows  %APPDATA%\\kiro-cli
 
-`~/.kiro/sessions` is a dotfile and is unchanged. `$KIRO_CLI_HOME` and
-`$KIRO_HOME` override each half.
+`~/.kiro/sessions` is a dotfile and is the same everywhere. `$KIRO_CLI_HOME`
+and `$KIRO_HOME` override each half.
 
 **A caveat inherited from upstream.** Kiro *deletes* turns from the SQLite store
 on `/clear` or compaction, unlike every other source here whose logs only grow.
@@ -38,6 +39,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Mapping
 
+from .. import platform_paths
 from ..models import Entry
 from .base import loads, number, parse_iso, to_int
 from .sqlite_source import SQLiteProvider, date_value, make_entry, query
@@ -405,20 +407,21 @@ def is_session_file(path: Path) -> bool:
     return path.suffix == ".jsonl" and path.parent.name == "cli"
 
 
-def sqlite_roots(home: Path | None = None, env: Mapping[str, str] | None = None) -> list[Path]:
-    """`$KIRO_CLI_HOME`, else the XDG data directory.
+def sqlite_roots(
+    home: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    system: str | None = None,
+) -> list[Path]:
+    """`$KIRO_CLI_HOME`, else the platform's application-data directory.
 
-    macOS keeps this under Library/Application Support; on Linux the equivalent
-    is $XDG_DATA_HOME. Like Cursor's, this path is not pinned by an upstream
-    test — the environment variable is the escape hatch.
+    Like Cursor's, this is not pinned by an upstream test; the environment
+    variable is the escape hatch.
     """
     env = os.environ if env is None else env
     configured = (env.get("KIRO_CLI_HOME") or "").strip()
     if configured:
         return [Path(configured).expanduser()]
-    data_home = (env.get("XDG_DATA_HOME") or "").strip()
-    base = Path(data_home).expanduser() if data_home else (home or Path.home()) / ".local" / "share"
-    return [base / "kiro-cli"]
+    return [platform_paths.data_base(home=home, env=env, system=system) / "kiro-cli"]
 
 
 def session_roots(home: Path | None = None, env: Mapping[str, str] | None = None) -> list[Path]:

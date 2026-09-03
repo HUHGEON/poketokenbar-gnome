@@ -9,18 +9,19 @@ Cursor keeps its chat history in the VS Code-style key/value store
 Costs are not reported: an included-plan Cursor account is billed by request,
 not per token, and the dashboard shows tokens only.
 
-**Path remapping.** This is one of only two sources whose location actually
-differs from macOS. Cursor is an Electron app, so its user-data directory is
-`app.getPath("userData")`:
+**Path remapping.** Cursor is an Electron app, so its user-data directory is
+`app.getPath("userData")` — which is one of the three places in this project
+where the platform actually changes the answer:
 
     macOS    ~/Library/Application Support/Cursor/User/globalStorage
-    Linux    $XDG_CONFIG_HOME/Cursor/User/globalStorage  (~/.config/Cursor/...)
+    Linux    $XDG_CONFIG_HOME/Cursor/User/globalStorage
+    Windows  %APPDATA%\\Cursor\\User\\globalStorage
 
-The Linux path follows the Electron convention that VS Code itself uses
-(`~/.config/Code`), but unlike every other reader here it is not pinned by an
-upstream test — nothing in the Swift suite exercises a Linux layout. Treat it as
-the one place a first Linux user is most likely to find nothing, and prefer a
-report over a guess if that happens: `$CURSOR_DATA_DIR` overrides it meanwhile.
+The Windows location is documented by Cursor's own users; the Linux one follows
+the convention VS Code itself uses (`~/.config/Code`). Neither is pinned by an
+upstream test — the Swift suite only ever exercises the macOS layout — so
+`$CURSOR_DATA_DIR` overrides both, and a report of where the files really were
+is more useful than a guess.
 
 Not yet ported: the signed-in dashboard API, which upstream prefers over this
 local scan when a Cursor login is present. The local store is what that path
@@ -35,6 +36,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Mapping
 
+from .. import platform_paths
 from ..models import Entry
 from .base import loads, parse_iso, to_int
 from .sqlite_source import SQLiteProvider, date_value, make_entry, query
@@ -94,15 +96,17 @@ def parse_database(path: Path) -> list[Entry]:
     return out
 
 
-def user_data_dirs(home: Path | None = None, env: Mapping[str, str] | None = None) -> list[Path]:
+def user_data_dirs(
+    home: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    system: str | None = None,
+) -> list[Path]:
     """Electron user-data directories for Cursor and Cursor Nightly."""
     env = os.environ if env is None else env
-    home = home or Path.home()
     configured = (env.get("CURSOR_DATA_DIR") or "").strip()
     if configured:
         return [Path(configured).expanduser()]
-    config_home = (env.get("XDG_CONFIG_HOME") or "").strip()
-    base = Path(config_home).expanduser() if config_home else home / ".config"
+    base = platform_paths.config_base(home=home, env=env, system=system)
     return [
         base / "Cursor" / "User" / "globalStorage",
         base / "Cursor Nightly" / "User" / "globalStorage",

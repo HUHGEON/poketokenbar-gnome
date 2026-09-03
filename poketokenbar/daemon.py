@@ -6,7 +6,7 @@ import os
 import time
 from pathlib import Path
 
-from . import commands, config, state
+from . import commands, config, platform_paths, state
 from .companion_store import CompanionStore
 from .burn import BurnTracker
 from .notify import Notifier
@@ -266,8 +266,7 @@ class Daemon:
 def main() -> int:
     from . import providers as provider_registry
 
-    cache_base = os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache")
-    cache = ScanCache(Path(cache_base) / "poketokenbar" / "scan.db")
+    cache = ScanCache(platform_paths.cache_base() / "poketokenbar" / "scan.db")
     daemon = Daemon(
         state_path=state.default_path(),
         config_path=config.default_path(),

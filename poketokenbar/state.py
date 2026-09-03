@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from . import format as fmt
+from . import platform_paths
 from . import l10n, limits
 from .models import DailyUsage
 
@@ -20,8 +21,7 @@ SCHEMA_VERSION = 1
 
 
 def default_path() -> Path:
-    base = os.environ.get("XDG_STATE_HOME") or (Path.home() / ".local" / "state")
-    return Path(base) / "poketokenbar" / "state.json"
+    return platform_paths.state_base() / "poketokenbar" / "state.json"
 
 
 def _limits_payload(status) -> dict:

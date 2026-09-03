@@ -21,6 +21,7 @@ import os
 from pathlib import Path
 from typing import Mapping
 
+from .. import platform_paths
 from ..models import Entry
 from .base import loads
 from .sqlite_source import SQLiteProvider, date_value, make_entry, query
@@ -109,13 +110,22 @@ def _is_channel_database(name: str) -> bool:
     return bool(channel) and all(c.isascii() and (c.isalnum() or c in "_-") for c in channel)
 
 
-def roots(home: Path | None = None, env: Mapping[str, str] | None = None) -> list[Path]:
-    """`$OPENCODE_DATA_DIR`, else `~/.local/share/opencode` — an XDG path already."""
+def roots(
+    home: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    system: str | None = None,
+) -> list[Path]:
+    """`$OPENCODE_DATA_DIR`, else the platform's application-data directory.
+
+    The Linux path (`~/.local/share/opencode`) is the one upstream names. The
+    others follow the same convention the tool's own runtime would, and like
+    Cursor and Kiro they are unverified — the variable overrides them.
+    """
     env = os.environ if env is None else env
     configured = (env.get("OPENCODE_DATA_DIR") or "").strip()
     if configured:
         return [Path(configured).expanduser()]
-    return [(home or Path.home()) / ".local" / "share" / "opencode"]
+    return [platform_paths.data_base(home=home, env=env, system=system) / "opencode"]
 
 
 class OpenCodeProvider(SQLiteProvider):

@@ -12,6 +12,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from . import platform_paths
+
 SPRITE_BASE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon"
 ITEM_BASE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items"
 USER_AGENT = "poketokenbar/0.1"
@@ -35,7 +37,7 @@ def sprite_url(species_id: int, animated: bool, shiny: bool) -> str:
 
 class SpriteStore:
     def __init__(self, cache_dir: Path | None = None) -> None:
-        base = cache_dir or (Path.home() / ".cache" / "poketokenbar")
+        base = cache_dir or (platform_paths.cache_base() / "poketokenbar")
         self.dir = base / "sprites"
         self.dir.mkdir(parents=True, exist_ok=True)
 

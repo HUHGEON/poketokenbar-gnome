@@ -12,12 +12,13 @@ import os
 import time
 from pathlib import Path
 
+from . import platform_paths
+
 _counter = 0
 
 
 def spool_dir() -> Path:
-    base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-    return Path(base) / "poketokenbar" / "commands"
+    return platform_paths.runtime_base() / "poketokenbar" / "commands"
 
 
 def enqueue(name: str, args: dict, spool: Path | None = None) -> Path:

@@ -6,6 +6,7 @@ exercise `state.vscdb` directly.
 
 import json
 import sqlite3
+from pathlib import Path
 
 from poketokenbar.providers import cursor
 
@@ -108,30 +109,46 @@ def test_cursor_reports_no_cost(tmp_path):
 # MARK: paths — the one source whose location really moves
 
 
-def test_linux_user_data_dirs_follow_the_electron_convention(tmp_path):
-    """macOS keeps this under Library/Application Support; Linux under XDG config.
+def test_user_data_dirs_follow_the_electron_convention_per_platform(tmp_path):
+    """Cursor's userData directory moves with the platform, and none of the
+    three is pinned by an upstream test — the Swift suite only exercises macOS.
 
-    Unlike the parsers, this path is not pinned by any upstream test — it
-    follows the Electron/VS Code convention and wants a real-world confirmation.
+    `system` is pinned here rather than read, so all three are checked from
+    whichever one the suite happens to run on.
     """
-    assert cursor.user_data_dirs(home=tmp_path, env={}) == [
-        tmp_path / ".config" / "Cursor" / "User" / "globalStorage",
-        tmp_path / ".config" / "Cursor Nightly" / "User" / "globalStorage",
-    ]
+    assert cursor.user_data_dirs(home=tmp_path, env={}, system="linux")[0] == (
+        tmp_path / ".config" / "Cursor" / "User" / "globalStorage"
+    )
+    assert cursor.user_data_dirs(home=tmp_path, env={}, system="darwin")[0] == (
+        tmp_path / "Library" / "Application Support" / "Cursor" / "User" / "globalStorage"
+    )
+    assert cursor.user_data_dirs(
+        home=tmp_path, env={"APPDATA": "C:/Roaming"}, system="win32"
+    )[0] == Path("C:/Roaming/Cursor/User/globalStorage")
 
 
-def test_xdg_config_home_is_honoured(tmp_path):
+def test_nightly_is_listed_on_every_platform(tmp_path):
+    for system in ("linux", "darwin", "win32"):
+        dirs = cursor.user_data_dirs(
+            home=tmp_path, env={"APPDATA": "C:/Roaming"}, system=system)
+        assert len(dirs) == 2
+        assert "Nightly" in str(dirs[1])
+
+
+def test_xdg_config_home_is_honoured_on_linux(tmp_path):
     elsewhere = tmp_path / "xdg"
-    dirs = cursor.user_data_dirs(home=tmp_path, env={"XDG_CONFIG_HOME": str(elsewhere)})
+    dirs = cursor.user_data_dirs(
+        home=tmp_path, env={"XDG_CONFIG_HOME": str(elsewhere)}, system="linux")
     assert dirs[0] == elsewhere / "Cursor" / "User" / "globalStorage"
 
 
-def test_cursor_data_dir_overrides_everything(tmp_path):
-    """The escape hatch while the Linux default is still unconfirmed."""
+def test_cursor_data_dir_overrides_every_platform(tmp_path):
+    """The escape hatch while none of the three defaults is confirmed."""
     custom = tmp_path / "elsewhere"
-    assert cursor.user_data_dirs(home=tmp_path, env={"CURSOR_DATA_DIR": str(custom)}) == [
-        custom
-    ]
+    for system in ("linux", "darwin", "win32"):
+        assert cursor.user_data_dirs(
+            home=tmp_path, env={"CURSOR_DATA_DIR": str(custom)}, system=system
+        ) == [custom]
 
 
 def test_nightly_is_scanned_alongside_stable(tmp_path):

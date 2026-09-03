@@ -11,6 +11,8 @@ import json
 import os
 from pathlib import Path
 
+from . import platform_paths
+
 DEFAULTS: dict[str, object] = {
     "refresh_interval": 120,
     "warn_threshold": 80,
@@ -44,8 +46,7 @@ DEFAULTS: dict[str, object] = {
 
 
 def default_path() -> Path:
-    base = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
-    return Path(base) / "poketokenbar" / "config.json"
+    return platform_paths.config_base() / "poketokenbar" / "config.json"
 
 
 def load(path: Path) -> dict:

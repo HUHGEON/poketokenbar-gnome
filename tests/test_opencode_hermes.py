@@ -6,6 +6,7 @@ readers can be verified without either tool installed.
 
 import json
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -131,12 +132,26 @@ def test_opencode_rejects_channel_names_outside_the_identifier_set(name):
     assert not opencode._is_channel_database(name)
 
 
-def test_opencode_roots_use_the_xdg_data_path(tmp_path):
-    assert opencode.roots(home=tmp_path, env={}) == [
+def test_opencode_roots_follow_the_platform(tmp_path):
+    """`system` is pinned, not read: otherwise this asserts whatever the machine
+    running the suite happens to be, and passes there while failing elsewhere."""
+    assert opencode.roots(home=tmp_path, env={}, system="linux") == [
         tmp_path / ".local" / "share" / "opencode"
     ]
+    assert opencode.roots(home=tmp_path, env={}, system="darwin") == [
+        tmp_path / "Library" / "Application Support" / "opencode"
+    ]
+    assert opencode.roots(
+        home=tmp_path, env={"APPDATA": "C:/Roaming"}, system="win32"
+    ) == [Path("C:/Roaming/opencode")]
+
+
+def test_opencode_data_dir_overrides_every_platform(tmp_path):
     custom = tmp_path / "elsewhere"
-    assert opencode.roots(home=tmp_path, env={"OPENCODE_DATA_DIR": str(custom)}) == [custom]
+    for system in ("linux", "darwin", "win32"):
+        assert opencode.roots(
+            home=tmp_path, env={"OPENCODE_DATA_DIR": str(custom)}, system=system
+        ) == [custom]
 
 
 # MARK: Hermes

@@ -381,20 +381,32 @@ def test_a_kiro_home_with_only_jsonl_still_yields_usage(tmp_path):
     assert entries[0].explicit_cost is None
 
 
-def test_sqlite_root_uses_the_xdg_data_directory(tmp_path):
-    """macOS keeps this under Library/Application Support; Linux under XDG data.
+def test_sqlite_root_follows_the_platform(tmp_path):
+    """An application-data directory, so it moves. Like Cursor's, none of the
+    three is pinned by an upstream test."""
+    from pathlib import Path
 
-    Like Cursor's, this path is not pinned by an upstream test.
-    """
-    assert kiro.sqlite_roots(home=tmp_path, env={}) == [
+    assert kiro.sqlite_roots(home=tmp_path, env={}, system="linux") == [
         tmp_path / ".local" / "share" / "kiro-cli"
     ]
-    elsewhere = tmp_path / "xdg"
-    assert kiro.sqlite_roots(home=tmp_path, env={"XDG_DATA_HOME": str(elsewhere)}) == [
-        elsewhere / "kiro-cli"
+    assert kiro.sqlite_roots(home=tmp_path, env={}, system="darwin") == [
+        tmp_path / "Library" / "Application Support" / "kiro-cli"
     ]
+    assert kiro.sqlite_roots(
+        home=tmp_path, env={"APPDATA": "C:/Roaming"}, system="win32"
+    ) == [Path("C:/Roaming/kiro-cli")]
+
+
+def test_sqlite_root_overrides(tmp_path):
+    elsewhere = tmp_path / "xdg"
+    assert kiro.sqlite_roots(
+        home=tmp_path, env={"XDG_DATA_HOME": str(elsewhere)}, system="linux"
+    ) == [elsewhere / "kiro-cli"]
     custom = tmp_path / "custom"
-    assert kiro.sqlite_roots(home=tmp_path, env={"KIRO_CLI_HOME": str(custom)}) == [custom]
+    for system in ("linux", "darwin", "win32"):
+        assert kiro.sqlite_roots(
+            home=tmp_path, env={"KIRO_CLI_HOME": str(custom)}, system=system
+        ) == [custom]
 
 
 def test_session_root_is_a_dotfile_and_unchanged(tmp_path):

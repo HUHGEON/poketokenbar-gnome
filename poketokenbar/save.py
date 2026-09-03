@@ -15,13 +15,14 @@ import json
 import os
 from pathlib import Path
 
+from . import platform_paths
+
 from .balance import Rarity
 from .companion import CompanionState, DexEntry, MonState
 
 
 def default_path() -> Path:
-    base = os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share")
-    return Path(base) / "poketokenbar" / "companion.json"
+    return platform_paths.data_base() / "poketokenbar" / "companion.json"
 
 
 def _rarity(value, default=Rarity.COMMON) -> Rarity:

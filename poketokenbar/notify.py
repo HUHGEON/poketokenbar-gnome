@@ -1,44 +1,149 @@
-"""Desktop notifications — replaces UserNotifications with notify-send.
+"""Desktop notifications, by whatever route this platform offers.
 
-Notifications are cosmetic: a failure here is swallowed, never surfaced as an
-error, and never allowed to interrupt a poll.
+Cosmetic throughout: a failure is swallowed, never surfaced as an error, and
+never allowed to interrupt a poll. That is also why the backends are tried in
+order and a missing one is not a problem — the alternative is a tracker that
+stops counting because it could not post a toast.
+
+    Linux    notify-send (libnotify)
+    macOS    osascript
+    Windows  PowerShell, via the shell's own toast API
+
+Windows has no equivalent of notify-send and no notification tool that ships
+everywhere, so the toast is raised through PowerShell, which does. It is slower
+than the other two — a process start of a few hundred milliseconds — but this
+runs a handful of times a day, on hatches and limit crossings.
 """
 
 from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 
 APP_NAME = "PokeTokenBar"
 ICON = "utilities-system-monitor"
 
+WINDOWS = "win32"
+MACOS = "darwin"
 
-def available() -> bool:
-    return shutil.which("notify-send") is not None
+# Long enough for a slow shell to start, short enough that a wedged one cannot
+# hold up a poll. A notification is not worth waiting on.
+TIMEOUT_SECONDS = 8
 
 
-def send(title: str, body: str = "", urgency: str = "normal") -> bool:
-    """Post one notification. Returns whether it was dispatched."""
-    if not available():
-        return False
+def _run(command: list[str]) -> bool:
     try:
         subprocess.run(
-            [
-                "notify-send",
-                "--app-name", APP_NAME,
-                "--icon", ICON,
-                "--urgency", urgency,
-                title,
-                body,
-            ],
+            command,
             check=False,
-            timeout=5,
+            timeout=TIMEOUT_SECONDS,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         return True
     except (OSError, subprocess.SubprocessError):
         return False
+
+
+def _quote_applescript(text: str) -> str:
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _quote_powershell(text: str) -> str:
+    """Single-quoted PowerShell strings escape a quote by doubling it.
+
+    XML-escaping comes on top of that, because the toast is defined as a
+    document: a stray `&` in a Pokemon name would otherwise make the whole
+    payload unparseable and the notification would silently not appear.
+    """
+    escaped = (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+    return escaped.replace("'", "''")
+
+
+def available(system: str | None = None) -> bool:
+    """Whether anything on this machine can post a notification."""
+    system = system or sys.platform
+    if system == WINDOWS:
+        return shutil.which("powershell") is not None or shutil.which("pwsh") is not None
+    if system == MACOS:
+        return shutil.which("osascript") is not None
+    return shutil.which("notify-send") is not None
+
+
+def send(title: str, body: str = "", urgency: str = "normal",
+         system: str | None = None) -> bool:
+    """Post one notification. Returns whether it was dispatched."""
+    system = system or sys.platform
+    if system == WINDOWS:
+        return _send_windows(title, body)
+    if system == MACOS:
+        return _send_macos(title, body)
+    return _send_linux(title, body, urgency)
+
+
+def _send_linux(title: str, body: str, urgency: str) -> bool:
+    if shutil.which("notify-send") is None:
+        return False
+    return _run([
+        "notify-send",
+        "--app-name", APP_NAME,
+        "--icon", ICON,
+        "--urgency", urgency,
+        title,
+        body,
+    ])
+
+
+def _send_macos(title: str, body: str) -> bool:
+    if shutil.which("osascript") is None:
+        return False
+    script = (
+        f'display notification "{_quote_applescript(body)}"'
+        f' with title "{_quote_applescript(title)}"'
+    )
+    return _run(["osascript", "-e", script])
+
+
+def windows_script(title: str, body: str) -> str:
+    """The PowerShell that raises one toast.
+
+    Built as a string so it can be inspected by a test: nothing here can run
+    PowerShell, and an unescaped quote in a Pokemon name is exactly the kind of
+    thing that would only show up as a notification that never arrives.
+    """
+    return (
+        "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications,"
+        " ContentType=WindowsRuntime] > $null;"
+        "$xml = [Windows.UI.Notifications.ToastNotificationManager]::"
+        "GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02);"
+        f"$xml.GetElementsByTagName('text')[0].AppendChild("
+        f"$xml.CreateTextNode('{_quote_powershell(title)}')) > $null;"
+        f"$xml.GetElementsByTagName('text')[1].AppendChild("
+        f"$xml.CreateTextNode('{_quote_powershell(body)}')) > $null;"
+        "$toast = [Windows.UI.Notifications.ToastNotification]::new($xml);"
+        "[Windows.UI.Notifications.ToastNotificationManager]::"
+        f"CreateToastNotifier('{APP_NAME}').Show($toast);"
+    )
+
+
+def _send_windows(title: str, body: str) -> bool:
+    shell = shutil.which("powershell") or shutil.which("pwsh")
+    if shell is None:
+        return False
+    return _run([
+        shell,
+        "-NoProfile",
+        # A machine-wide execution policy would otherwise refuse this, and the
+        # refusal is silent from here.
+        "-ExecutionPolicy", "Bypass",
+        "-NonInteractive",
+        "-Command", windows_script(title, body),
+    ])
 
 
 class Notifier:
