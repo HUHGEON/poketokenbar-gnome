@@ -1,5 +1,7 @@
 import random
 
+import random
+
 from poketokenbar import balance
 from poketokenbar.balance import Rarity
 from poketokenbar.companion import (
@@ -19,33 +21,46 @@ def _state():
     return CompanionState()
 
 
+def _rng():
+    """A hatch that is never a surprise.
+
+    Every hatch rolls shiny, nature and a 1-in-128 Ditto disguise, and an
+    unseeded Random meant those rolls differed per run. A disguised Ditto's
+    first threshold is a reveal rather than an evolution — correctly, since it
+    cannot evolve — so a growth test written without a seed failed about once
+    in two hundred runs, on whichever platform happened to draw it. The
+    disguise is tested through test_ditto, not through growth.
+    """
+    return random.Random(20260903)
+
+
 # --- egg -------------------------------------------------------------------
 
 
 def test_egg_absorbs_tokens_without_hatching_early():
     s = _state()
-    apply_usage(s, 1_000_000, line_for_egg=_line())
+    apply_usage(s, 1_000_000, line_for_egg=_line(), rng=_rng())
     assert s.active is None
     assert s.egg_usage == 1_000_000
 
 
 def test_egg_hatches_at_the_threshold():
     s = _state()
-    events = apply_usage(s, balance.EGG_HATCH_THRESHOLD, line_for_egg=_line())
+    events = apply_usage(s, balance.EGG_HATCH_THRESHOLD, line_for_egg=_line(), rng=_rng())
     assert s.active is not None
     assert events.hatched == 1
 
 
 def test_hatch_overflow_carries_into_the_hatchling():
     s = _state()
-    apply_usage(s, balance.EGG_HATCH_THRESHOLD + 250, line_for_egg=_line())
+    apply_usage(s, balance.EGG_HATCH_THRESHOLD + 250, line_for_egg=_line(), rng=_rng())
     assert s.active.used_at_stage == 250
 
 
 def test_egg_holds_progress_when_no_species_data_is_available():
     # Offline at the moment of hatching must not discard the tokens.
     s = _state()
-    apply_usage(s, balance.EGG_HATCH_THRESHOLD + 500, line_for_egg=None)
+    apply_usage(s, balance.EGG_HATCH_THRESHOLD + 500, line_for_egg=None, rng=_rng())
     assert s.active is None
     assert s.egg_usage == balance.EGG_HATCH_THRESHOLD + 500
 
@@ -53,7 +68,8 @@ def test_egg_holds_progress_when_no_species_data_is_available():
 def test_hatching_consumes_a_premium_egg_guarantee():
     s = _state()
     s.egg_tier = Rarity.RARE
-    apply_usage(s, balance.EGG_HATCH_THRESHOLD, line_for_egg=_line(rarity=Rarity.RARE))
+    apply_usage(s, balance.EGG_HATCH_THRESHOLD,
+                line_for_egg=_line(rarity=Rarity.RARE), rng=_rng())
     assert s.egg_tier is None
 
 
@@ -62,7 +78,8 @@ def test_hatching_consumes_a_premium_egg_guarantee():
 
 def _hatched(forms=3, rarity=Rarity.COMMON):
     s = _state()
-    apply_usage(s, balance.EGG_HATCH_THRESHOLD, line_for_egg=_line(forms, rarity))
+    apply_usage(s, balance.EGG_HATCH_THRESHOLD, line_for_egg=_line(forms, rarity),
+                rng=_rng())
     return s
 
 
