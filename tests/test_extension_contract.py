@@ -543,3 +543,20 @@ def test_the_popup_renders_both_forecast_outcomes(payload):
     assert "before_reset" in source
     assert "no_limit_before_reset" in "\n".join(source_code())
     assert "before_reset" in payload["burn"]["session"]
+
+
+def test_the_pokedex_can_release_a_pin_as_well_as_set_one(payload):
+    """Tapping a cell only ever pinned, so the way back to the companion was
+    the settings dropdown — and nothing in the grid said which species was
+    pinned in the first place."""
+    source = "\n".join(source_code(strip_strings=True))
+    # Optional chaining is how the sections read every payload block, so the
+    # `?.` has to be allowed for.
+    assert re.search(r"panel\??\.representative_id", source), (
+        "nothing reads which species is pinned")
+    with_strings = "\n".join(source_code())
+    assert re.search(r"Commands\.represent\(\s*pinned \? ''", with_strings), (
+        "there is no release; an empty id is what the daemon reads as "
+        "'follow the companion again'"
+    )
+    assert "representative_id" in payload["panel"]

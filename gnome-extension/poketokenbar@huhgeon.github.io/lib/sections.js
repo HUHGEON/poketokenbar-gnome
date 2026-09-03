@@ -522,26 +522,37 @@ class CollectionSection extends Section {
         const t = key => this._reader.text(key);
         const sprite = new Sprite({size: 40});
         sprite.setPath(dexEntry.sprite_path || null);
+        const pinnedID = String(this._state?.panel?.representative_id ?? '');
+        const pinned = pinnedID !== '' && pinnedID === String(dexEntry.species_id);
+
         const caption = label(
             dexEntry.is_shiny ? `✨${dexEntry.species_id}` : `#${dexEntry.species_id}`,
             'poketokenbar-dexnum');
-        const parts = [sprite, caption];
+        // The star both shows and sets which species the panel follows.
+        // Pressing it again releases it: tapping a cell only ever pinned, so
+        // the way back to the companion was the settings dropdown, and nothing
+        // in the grid said which species was pinned in the first place.
+        const star = new St.Button({
+            style_class: pinned
+                ? 'poketokenbar-dexstar poketokenbar-dexstar-on'
+                : 'poketokenbar-dexstar',
+            can_focus: true,
+            child: label(pinned ? '★' : '☆'),
+        });
+        // An empty id is what the daemon reads as "follow the companion again".
+        star.connect('clicked',
+            () => Commands.represent(pinned ? '' : dexEntry.species_id));
+
+        const parts = [
+            row([caption, new St.Widget({x_expand: true}), star]),
+            sprite,
+        ];
         // The one being raised right now appears in the Pokedex before it
         // graduates, and without the badge it is indistinguishable from a
         // finished catch.
         if (dexEntry.is_raising)
             parts.push(badge(t('raising'), 'poketokenbar-badge-small'));
-        const cell = column(parts, 'poketokenbar-dexcell');
-
-        // Tapping a cell pins that species to the panel. The daemon refuses a
-        // species the save does not own, so this cannot pin a ghost.
-        const clickable = new St.Button({
-            style_class: 'poketokenbar-dexbutton',
-            can_focus: true,
-            child: cell,
-        });
-        clickable.connect('clicked', () => Commands.represent(dexEntry.species_id));
-        return clickable;
+        return column(parts, 'poketokenbar-dexcell');
     }
 
     _buildCatchLog(state) {
