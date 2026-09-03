@@ -31,6 +31,11 @@ jobs:
       - name: Tests
         run: python -m pytest -q
 
+      # These execute extension code rather than reading it, so a failure here
+      # is a real behavioural regression, not a naming one.
+      - name: JavaScript unit tests
+        run: node --test tests/js/
+
       - name: The JavaScript checks actually ran
         # A skip here is indistinguishable from a pass in the summary, and the
         # whole point of them is that nothing else covers the extension.
