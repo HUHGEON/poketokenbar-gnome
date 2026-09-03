@@ -68,6 +68,32 @@ them.
 **Install.** CI installs from a clean checkout, starts the daemon, and fails
 unless a state file lands.
 
+**Windows, on Windows.** A CI job on windows-latest runs the whole suite, checks
+every file the daemon owns lands under the user profile, seeds real log files
+and asserts the totals off a real `state.json`, and constructs the Qt tray app.
+`platform_paths` injects the system so all three mappings can be checked from
+anywhere — but the one thing an injected mapping cannot tell you is whether the
+environment actually looks the way it was assumed to, and that job found two
+bugs no amount of injection would have:
+
+- `expand` tested for an absolute path with `startswith("/")` and split segments
+  on the same character, so every `C:\` path was read as relative and dropped.
+  Extra scan folders silently did nothing on Windows.
+- `fold` and the eviction guard are string prefix checks written against "/",
+  and a Windows path resolves with backslashes — so nested roots would have
+  doubled the scan, and the guard that stops an extra folder swallowing a
+  curated default would never have fired at all.
+
+Confirmed on the runner:
+
+```
+config   C:\Users\runneradmin\AppData\Roaming\poketokenbar\config.json
+cache    C:\Users\runneradmin\AppData\Local\poketokenbar
+spool    C:\Users\RUNNER~1\AppData\Local\Temp\poketokenbar\commands  (writable)
+providers: {'claude_code': 1250, 'gemini': 600}
+tabs     : ['Home', 'Shop', 'Bag', 'Collection', 'Settings']
+```
+
 **Settings coverage.** A test fails if any of the daemon's settings has no
 control in the UI. It found thirteen of seventeen unreachable.
 

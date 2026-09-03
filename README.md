@@ -2,9 +2,10 @@
 
 # PokeTokenBar for GNOME
 
-**당신의 AI 코딩 토큰을 포켓몬으로 — GNOME 패널에서.**
+**당신의 AI 코딩 토큰을 포켓몬으로 — GNOME 패널과 Windows 트레이에서.**
 
 [![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-45%2B-4a86cf?logo=gnome&logoColor=white)](https://gnome.org)
+[![Windows](https://img.shields.io/badge/Windows-10%2B-0078d4?logo=windows&logoColor=white)](#windows)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 
@@ -32,8 +33,10 @@
 |---|---|
 | 사용량 데몬 (프로바이더 12개) | ✅ 완료 |
 | GNOME Shell 확장 | ✅ 작성 완료 |
-| 테스트 | ✅ Python 607개 + JavaScript 13개, CI 초록 |
+| Windows 트레이 앱 (Qt) | ✅ 작성 완료 |
+| 테스트 | ✅ Python 725개 + JavaScript 13개, CI 초록 |
 | 클린 체크아웃에서 설치 검증 | ✅ CI에서 |
+| **실제 Windows에서 데몬 동작 검증** | ✅ **CI의 windows-latest 러너에서** |
 | 실제 GNOME 데스크탑에서 검증 | ❌ **아직** |
 
 마지막 줄이 정직한 부분입니다. 확장이 읽는 모든 필드는 실제 데몬 payload와 기계적으로 대조되고,
@@ -107,6 +110,26 @@ systemctl --user enable --now poketokend
 ```
 
 그다음 확장 앱에서 **PokeTokenBar**를 켜면 됩니다.
+
+### Windows
+
+```powershell
+git clone https://github.com/HUHGEON/poketokenbar-gnome.git
+cd poketokenbar-gnome
+powershell -ExecutionPolicy Bypass -File packaging\windows\install.ps1
+```
+
+패널이 없으니 알림 영역(트레이)에 포켓몬이 삽니다. 클릭하면 같은 탭들이 열리고,
+데몬과 트레이 앱 둘 다 로그인 시 자동 시작합니다. 전부 사용자 프로필 안에만 설치되고
+관리자 권한이 필요 없습니다.
+
+| | 위치 |
+|---|---|
+| 설정·상태·세이브 | `%APPDATA%\poketokenbar\` |
+| 캐시 | `%LOCALAPPDATA%\poketokenbar\` |
+| 프로그램 | `%LOCALAPPDATA%\PokeTokenBar\` |
+
+제거는 `packaging\windows\uninstall.ps1` — 세이브는 일부러 남겨둡니다.
 
 ```bash
 gnome-extensions enable poketokenbar@huhgeon.github.io
