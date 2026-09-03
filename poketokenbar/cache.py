@@ -40,6 +40,7 @@ def _encode(entries: list[Entry]) -> str:
                 "output": e.output,
                 "cache_write": e.cache_write,
                 "cache_read": e.cache_read,
+                "explicit_cost": e.explicit_cost,
             }
             for e in entries
         ]
@@ -57,6 +58,8 @@ def _decode(raw: str) -> list[Entry]:
             output=d["output"],
             cache_write=d["cache_write"],
             cache_read=d["cache_read"],
+            # Blobs written before the field existed simply carry no charge.
+            explicit_cost=d.get("explicit_cost"),
         )
         for d in json.loads(raw)
     ]

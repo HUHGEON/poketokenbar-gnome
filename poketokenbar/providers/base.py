@@ -233,9 +233,15 @@ class ScanningProvider:
         return self.dedup(all_entries)
 
     def cost_of(self, entry: Entry) -> float:
-        """Priced per entry, because a day mixes models with different rates."""
+        """Priced per entry, because a day mixes models with different rates.
+
+        An agent that recorded its own charge wins over the price table — that
+        figure is the source of truth for what was actually billed.
+        """
         if not self.reports_cost:
             return 0.0
+        if entry.explicit_cost is not None and entry.explicit_cost > 0:
+            return entry.explicit_cost
         return pricing.cost(
             entry.model, entry.input, entry.output, entry.cache_write, entry.cache_read
         )

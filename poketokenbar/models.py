@@ -18,6 +18,11 @@ class Entry:
     output: int = 0
     cache_write: int = 0
     cache_read: int = 0
+    # Some agents persist the exact charge alongside token usage (omp, Grok,
+    # OpenCode). Prefer it over the model price table so a local report matches
+    # what the tool itself billed. Only a value > 0 counts: free or unpriced
+    # models are written as 0, which means "no figure", not "cost nothing".
+    explicit_cost: float | None = None
 
     @property
     def total(self) -> int:
