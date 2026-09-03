@@ -49,33 +49,16 @@ function getCoglContext() {
     return coglContext;
 }
 
-/** An ImageContent sized to the pixbuf, whichever way this Shell spells it.
+/** `set_bytes` gained a leading `Cogl.Context` in GNOME 48.
  *
- * Two signatures have to be tolerated, and neither can be detected by asking:
+ * Tried in turn rather than version-checked: the manifest spans 45 to 51, and
+ * a version check would be a second thing to keep correct across all of them.
  *
- *   - `new_with_preferred_size` takes two numbers on some versions and a
- *     `Graphene.Size` on others. Passing numbers to the latter fails with
- *     "Wrong type number; boxed type GrapheneSize expected", which is exactly
- *     what a real install reported.
- *   - `set_bytes` gained a leading `Cogl.Context` in GNOME 48.
- *
- * Both are tried in turn rather than version-checked: the manifest spans 45 to
- * 51, a version check would be a second thing to keep correct, and a throw here
- * takes the whole extension down.
+ * `new_with_preferred_size` needs no such handling — it has taken two ints in
+ * every release, checked against the headers on both gnome-48 and main. An
+ * earlier version of this file guessed otherwise while chasing the GrapheneSize
+ * error, which turned out to come from the actor constructor instead.
  */
-function newImageContent(width, height) {
-    try {
-        return St.ImageContent.new_with_preferred_size(width, height);
-    } catch (_e) {
-        // The boxed-size form. Constructed by property so this file does not
-        // have to import Graphene just to build one.
-        return new St.ImageContent({
-            preferred_width: width,
-            preferred_height: height,
-        });
-    }
-}
-
 function setContentBytes(content, bytes, format, width, height, rowstride) {
     const context = getCoglContext();
     if (context) {
@@ -97,7 +80,7 @@ function setContentBytes(content, bytes, format, width, height, rowstride) {
 function frameFromPixbuf(pixbuf, delay) {
     const width = pixbuf.get_width();
     const height = pixbuf.get_height();
-    const content = newImageContent(width, height);
+    const content = St.ImageContent.new_with_preferred_size(width, height);
     setContentBytes(
         content,
         pixbuf.read_pixel_bytes(),
@@ -180,13 +163,20 @@ export function decodeFrames(path) {
 export const Sprite = GObject.registerClass(
 class Sprite extends St.Widget {
     _init(params = {}) {
-        const size = params.size ?? 22;
+        // `size` is ours, and it must not reach the actor's constructor.
+        //
+        // Clutter.Actor already has a `size` property and its type is the boxed
+        // graphene_size_t, so spreading this straight through made every
+        // `new Sprite({size: 18})` throw "Wrong type number; boxed type
+        // GrapheneSize expected" — which took the whole extension down before
+        // it had drawn anything, because the panel builds a sprite first.
+        const {size = 22, ...actorParams} = params;
         super._init({
             style_class: 'poketokenbar-sprite',
             // Pixel art: never smooth it.
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
-            ...params,
+            ...actorParams,
         });
         this._size = size;
         this._frames = [];

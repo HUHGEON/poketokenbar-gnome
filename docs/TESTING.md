@@ -46,6 +46,14 @@ Thirteen tests pin the rule a plausible implementation gets wrong — thin the
 frames, never stretch them — because raising each frame to the floor keeps all
 55 and turns a 2.75s loop into 22s.
 
+**GObject construction.** A test forbids spreading a caller's option bag into
+`super._init`. That is what actually broke the first real install: `new Sprite({
+size: 18 })` looked like a local option, but `Clutter.Actor` already has a
+`size` property whose type is the boxed `graphene_size_t`, so every sprite threw
+at construction and the extension never started. Nothing here can ask GObject
+which names are real, so the rule is structural — destructure your own keys out
+first.
+
 **GNOME API assumptions.** Checked against the documentation rather than
 memory, which found four that were wrong: `PopupSwitchMenuItem` does not lay
 out inside an St container, so the settings tab would have been blank;

@@ -130,3 +130,30 @@ def test_the_manifest_covers_the_current_gnome_releases():
     assert declared == set(range(min(declared), max(declared) + 1))
     # Current stable at the time of writing is 50, with 51 due September 2026.
     assert max(declared) >= 51
+
+
+def test_no_caller_options_are_spread_into_a_gobject_constructor():
+    """`super._init({...params})` hands the caller's whole option bag to GObject.
+
+    This is what actually broke the first real install. `new Sprite({size: 18})`
+    looked like a local option, but Clutter.Actor already has a `size` property
+    whose type is the boxed graphene_size_t — so every sprite constructed threw
+    "Wrong type number; boxed type GrapheneSize expected", and since the panel
+    builds a sprite first, the extension never started at all.
+
+    Nothing available here can ask GObject which names are real, so the rule is
+    structural instead: destructure your own options out before the spread.
+    """
+    offenders = []
+    for path in js_files():
+        source = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"super\._init\(\{(.*?)\}\);", source, re.S):
+            body = match.group(1)
+            if re.search(r"\.\.\.params\b", body):
+                line = source[: match.start()].count("\n") + 1
+                offenders.append(f"{path.name}:{line}")
+    assert not offenders, (
+        "these spread the caller's options straight into GObject: "
+        f"{offenders}. Destructure your own keys out first — a name that "
+        "collides with a real property fails at construction."
+    )
