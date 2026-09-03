@@ -87,3 +87,18 @@ def test_placeholder_strings_keep_their_placeholder():
     """%1 is substituted by the UI; a translation that drops it loses the time."""
     for language in l10n.LANGUAGES:
         assert "%1" in l10n.t("at_this_rate", language), language
+
+
+def test_the_extension_language_list_matches_the_daemon():
+    """A code the extension offers but the daemon cannot resolve falls back to
+    English while the settings row still shows it selected."""
+    import json
+    import re
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parent.parent
+        / "gnome-extension" / "poketokenbar@huhgeon.github.io" / "lib" / "languages.js"
+    ).read_text(encoding="utf-8")
+    listed = json.loads(re.search(r"\[(.*?)\]", source, re.S).group(0).replace("'", '"'))
+    assert listed == list(l10n.LANGUAGES)

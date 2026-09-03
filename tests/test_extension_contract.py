@@ -90,7 +90,20 @@ def full_payload() -> dict:
 
 _LINE_COMMENT = re.compile(r"//[^\n]*")
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
-_STRING = re.compile(r"""'[^'\n]*'|"[^"\n]*"|`[^`]*`""", re.S)
+_QUOTED = re.compile("'[^'\\n]*'" + '|"[^"\\n]*"')
+_TEMPLATE = re.compile(r"`[^`]*`", re.S)
+_INTERPOLATION = re.compile(r"\$\{([^{}]*)\}")
+
+
+def _strip_literals(text: str) -> str:
+    """Remove string text while keeping the code inside `${...}`.
+
+    Dropping template literals whole was a real hole: every
+    `${providerRow.matched_folders}` disappeared with them, so a typo in one
+    passed. Only the literal halves go.
+    """
+    text = _TEMPLATE.sub(lambda m: " ".join(_INTERPOLATION.findall(m.group(0))), text)
+    return _QUOTED.sub("''", text)
 
 
 def source_files() -> list[Path]:
@@ -108,7 +121,7 @@ def source_code(strip_strings: bool = False) -> list[str]:
     out = []
     for path in source_files():
         text = _LINE_COMMENT.sub("", _BLOCK_COMMENT.sub("", path.read_text(encoding="utf-8")))
-        out.append(_STRING.sub("''", text) if strip_strings else text)
+        out.append(_strip_literals(text) if strip_strings else text)
     return out
 
 
@@ -215,6 +228,8 @@ ROW_ACCESSORS = {
     "chainStage": "catch_chain",
     "limitWindow": "limit_window",
     "panelWindow": "panel_window",
+    "providerRow": "settings_provider",
+    "config": "config",
 }
 
 
@@ -224,6 +239,15 @@ def row_keys(name: str, payload: dict) -> set[str]:
         return set(payload["today"]["models"][0])
     if name == "limit_window":
         return set(payload["limits"]["session"])
+    if name == "settings_provider":
+        return set(payload["settings"]["providers"][0])
+    if name == "config":
+        # Not the fixture's config, which is a stub: the real defaults, because
+        # config.load drops any key that has no default and the setting would
+        # then silently do nothing.
+        from poketokenbar import config as config_module
+
+        return set(config_module.DEFAULTS)
     if name == "panel_window":
         # Deliberately separate from limit_window: the panel row carries text
         # and a level already resolved, the popup row the raw utilisation.
@@ -327,3 +351,22 @@ def test_the_settings_block_lists_every_provider(payload):
     row = payload["settings"]["providers"][0]
     assert set(row) == {"id", "display_name", "custom_scan_roots", "matched_folders"}
     assert set(providers.registered_ids())  # registry is non-empty
+
+
+def test_every_settings_toggle_maps_to_a_real_default():
+    """A switch bound to a key with no default flips and changes nothing:
+    config.load drops it on the next read."""
+    from poketokenbar import config as config_module
+
+    source = (EXTENSION_DIR / "lib" / "sections.js").read_text(encoding="utf-8")
+    keys = set(re.findall(r"""\{key:\s*['"](\w+)['"]""", source))
+    assert keys, "no declared toggles found; has TOGGLES been renamed?"
+    unknown = keys - set(config_module.DEFAULTS)
+    assert not unknown, f"settings toggles with no daemon default: {sorted(unknown)}"
+
+
+def test_every_settings_toggle_labels_itself_from_the_catalogue(payload):
+    source = (EXTENSION_DIR / "lib" / "sections.js").read_text(encoding="utf-8")
+    strings = set(re.findall(r"""string:\s*['"](\w+)['"]""", source))
+    unknown = strings - set(payload["strings"])
+    assert not unknown, f"toggle labels with no catalogue entry: {sorted(unknown)}"

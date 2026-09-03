@@ -11,7 +11,11 @@ import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+
 import * as Commands from './commands.js';
+import * as Config from './config.js';
+import {LANGUAGES} from './languages.js';
 import {Sprite} from './sprite.js';
 import {
     Meter, button, column, heading, label, levelClass, placeholder, row, statLine,
@@ -366,5 +370,101 @@ class CollectionSection extends Section {
             ]);
             this.add_child(row([chain, details], 'poketokenbar-card'));
         }
+    }
+});
+
+// MARK: Settings
+
+// Declared rather than passed inline so a test can check every one of them
+// against the daemon's own defaults: config.load drops a key it has no default
+// for, which makes a wrong name here a switch that flips and does nothing.
+const TOGGLES = [
+    {key: 'show_tokens_in_menu', string: 'todays_tokens'},
+    {key: 'show_cost_in_menu', string: 'price'},
+    {key: 'show_limit_in_menu', string: 'limits_official'},
+    {key: 'floating_pet_enabled', string: 'raising'},
+];
+
+export const SettingsSection = GObject.registerClass(
+class SettingsSection extends Section {
+    _init(reader) {
+        super._init();
+        this._reader = reader;
+        // Which provider's scan-folder field is open. Only one at a time: the
+        // list is twelve long and twelve text fields is a wall, not a setting.
+        this._openProvider = null;
+        this._state = null;
+    }
+
+    update(state) {
+        this._state = state;
+        this.clear();
+        const config = state?.config ?? {};
+
+        this.add_child(heading(this._reader.text('refresh')));
+        for (const toggle of TOGGLES)
+            this._addToggle(toggle.key, toggle.string, config);
+
+        this._addLanguage(config);
+        this._addScanFolders(state);
+    }
+
+    _addToggle(key, stringKey, config) {
+        const toggle = new PopupMenu.PopupSwitchMenuItem(
+            this._reader.text(stringKey), Boolean(config[key]));
+        toggle.connect('toggled', (_item, value) => Config.set(key, value));
+        this.add_child(toggle);
+    }
+
+    _addLanguage(config) {
+        const current = config.language ?? 'en';
+        const buttons = LANGUAGES.map(code => {
+            const widget = button(code, () => Config.set('language', code));
+            // The chosen one stays flat rather than being disabled: a disabled
+            // button reads as unavailable, not as selected.
+            widget.opacity = code === current ? 255 : 130;
+            return widget;
+        });
+        this.add_child(row(buttons));
+    }
+
+    _addScanFolders(state) {
+        const providers = state?.settings?.providers ?? [];
+        if (providers.length === 0)
+            return;
+        this.add_child(heading(this._reader.text('collection')));
+
+        for (const providerRow of providers) {
+            const summary = providerRow.custom_scan_roots
+                ? `${providerRow.display_name} (${providerRow.matched_folders})`
+                : providerRow.display_name;
+            const open = this._openProvider === providerRow.id;
+            const toggle = button(summary, () => {
+                this._openProvider = open ? null : providerRow.id;
+                this.update(this._state);
+            });
+            this.add_child(toggle);
+            if (open)
+                this.add_child(this._scanFolderEntry(providerRow));
+        }
+    }
+
+    _scanFolderEntry(providerRow) {
+        const entry = new St.Entry({
+            style_class: 'poketokenbar-entry',
+            can_focus: true,
+            x_expand: true,
+        });
+        entry.set_text(providerRow.custom_scan_roots ?? '');
+        entry.clutter_text.connect('activate', () => {
+            Config.setScanRoots(providerRow.id, entry.get_text());
+        });
+        return column([
+            entry,
+            // The count comes from the daemon and reports folders that
+            // survived, not patterns typed: an extra that swallows a curated
+            // default is dropped, and saying otherwise would be a lie.
+            label(`${providerRow.matched_folders}`, 'poketokenbar-subtle'),
+        ]);
     }
 });

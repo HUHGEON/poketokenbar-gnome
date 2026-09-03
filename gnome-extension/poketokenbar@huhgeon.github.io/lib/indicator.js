@@ -15,7 +15,9 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import * as Commands from './commands.js';
 import {Sprite} from './sprite.js';
-import {BagSection, CollectionSection, HomeSection, ShopSection} from './sections.js';
+import {
+    BagSection, CollectionSection, HomeSection, SettingsSection, ShopSection,
+} from './sections.js';
 import {button, label, levelClass, row} from './widgets.js';
 
 // The popup is a fixed width so the Pokedex grid never reflows mid-browse.
@@ -49,6 +51,7 @@ class Indicator extends PanelMenu.Button {
             shop: new ShopSection(reader),
             bag: new BagSection(reader),
             collection: new CollectionSection(reader),
+            settings: new SettingsSection(reader),
         };
         this._currentTab = 'home';
 
@@ -111,7 +114,8 @@ class Indicator extends PanelMenu.Button {
         this._tabBar.destroy_all_children();
         this._bodyBox.destroy_all_children();
         for (const [name, key] of [
-            ['home', 'home'], ['shop', 'shop'], ['bag', 'bag'], ['collection', 'collection'],
+            ['home', 'home'], ['shop', 'shop'], ['bag', 'bag'],
+            ['collection', 'collection'], ['settings', 'refresh'],
         ]) {
             const tab = button(this._reader.text(key), () => this._selectTab(name),
                 'poketokenbar-tab');
