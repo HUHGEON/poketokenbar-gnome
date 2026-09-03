@@ -46,6 +46,26 @@ def _limits_payload(status) -> dict:
     }
 
 
+def _period_rows(periods: dict | None) -> dict:
+    """Week and month with their text prepared, like every other number here.
+
+    The daemon sums these as raw ints; formatting them in the UI is what led to
+    QML rendering 8.55336e+07 in the first place.
+    """
+    out = {}
+    for key, bucket in (periods or {}).items():
+        tokens = bucket.get("tokens", 0)
+        cost = bucket.get("cost", 0.0)
+        out[key] = {
+            "tokens": tokens,
+            "cost": cost,
+            "tokens_text": fmt.grouped(tokens),
+            "tokens_compact": fmt.compact(tokens),
+            "cost_text": fmt.cost(cost),
+        }
+    return out
+
+
 def _combined_models(daily_by_provider: dict) -> dict[str, int]:
     combined: dict[str, int] = {}
     for daily in daily_by_provider.values():
@@ -137,7 +157,7 @@ def build(
         "catch_log": catch_log or [],
         "rarity_counts": rarity_counts or {},
         "catch_counts": catch_counts or {},
-        "periods": periods or {},
+        "periods": _period_rows(periods),
         "strings": l10n.catalogue(config_values.get("language", "en")),
         "celebration": celebration or {},
         "burn": burn or {},
@@ -172,7 +192,12 @@ def build(
             ]
             if config_values.get("show_limit_in_menu")
             else [],
-            "sprite_path": (companion_payload or {}).get("sprite_path", ""),
+            # The pinned species when there is one, else the companion. Reading
+            # `sprite_path` here instead would leave the pin with nowhere to
+            # take effect, which is the only thing pinning does.
+            "sprite_path": (companion_payload or {}).get(
+                "panel_sprite_path", (companion_payload or {}).get("sprite_path", "")
+            ),
         },
     }
 

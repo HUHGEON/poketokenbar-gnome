@@ -1,0 +1,73 @@
+"""state.json's own shape — the contract the UI reads.
+
+Every number the UI shows is formatted here rather than in the front end. That
+rule exists because QML renders a large float as 8.55336e+07, and the same trap
+is waiting in any other UI that formats numbers itself.
+"""
+
+from poketokenbar import state
+from poketokenbar.models import DailyUsage
+
+
+def test_periods_carry_prepared_text():
+    """The daemon sums these as raw ints; the UI must not have to format them."""
+    payload = state.build(
+        {}, {}, [], periods={"week": {"tokens": 85_533_600, "cost": 1.5},
+                             "month": {"tokens": 2, "cost": 0.0}}
+    )
+    week = payload["periods"]["week"]
+    assert week["tokens"] == 85_533_600
+    assert week["tokens_text"] == "85,533,600"
+    assert "e+" not in week["tokens_compact"]
+    assert week["cost_text"]
+    assert payload["periods"]["month"]["tokens_text"] == "2"
+
+
+def test_absent_periods_stay_empty():
+    assert state.build({}, {}, [])["periods"] == {}
+
+
+def test_the_panel_sprite_follows_the_pin():
+    """Pinning changes the panel and nothing else, so if the panel ignored it
+    the feature would have nowhere to take effect at all."""
+    payload = state.build(
+        {}, {}, [],
+        companion_payload={
+            "sprite_path": "/cache/5-a.gif",
+            "panel_sprite_path": "/cache/3-sha.gif",
+        },
+    )
+    assert payload["panel"]["sprite_path"] == "/cache/3-sha.gif"
+    assert payload["companion"]["sprite_path"] == "/cache/5-a.gif", (
+        "Home still shows what is being raised"
+    )
+
+
+def test_the_panel_falls_back_to_the_companion_sprite():
+    """A save from before pinning existed has no panel_sprite_path at all."""
+    payload = state.build({}, {}, [], companion_payload={"sprite_path": "/cache/5-a.gif"})
+    assert payload["panel"]["sprite_path"] == "/cache/5-a.gif"
+
+
+def test_the_panel_sprite_is_blank_without_a_companion():
+    assert state.build({}, {}, [])["panel"]["sprite_path"] == ""
+
+
+def test_today_totals_are_preformatted():
+    payload = state.build(
+        {"claude_code": DailyUsage(date="d", total_tokens=85_533_600, total_cost=12.5)},
+        {},
+        [],
+    )
+    assert payload["today"]["tokens_grouped"] == "85,533,600"
+    assert "e+" not in payload["today"]["tokens_compact"]
+    assert payload["today"]["cost_text"]
+
+
+def test_provider_totals_are_preformatted():
+    payload = state.build(
+        {"pi": DailyUsage(date="d", total_tokens=1_234_567)}, {}, []
+    )
+    row = payload["providers"]["pi"]
+    assert row["total_tokens_text"] == "1,234,567"
+    assert "e+" not in row["total_tokens_compact"]
