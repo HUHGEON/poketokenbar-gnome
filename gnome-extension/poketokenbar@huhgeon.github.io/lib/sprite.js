@@ -26,6 +26,69 @@ const MINIMUM_FRAME_MS = 20;
 // beyond that is not one of ours and is not worth the memory.
 const MAX_FRAMES = 240;
 
+/** The Cogl context `set_bytes` wants, on the versions that want one.
+ *
+ * GNOME 48 gave `St.ImageContent.set_bytes` and `set_data` a new first
+ * parameter. Resolved lazily and remembered: `global` does not exist until the
+ * Shell is up, so reaching for it at import time throws before the extension
+ * has even loaded.
+ */
+let coglContext;
+let coglContextResolved = false;
+
+function getCoglContext() {
+    if (!coglContextResolved) {
+        coglContextResolved = true;
+        try {
+            coglContext = global.stage.context.get_backend().get_cogl_context();
+        } catch (_e) {
+            // Older Shell: there is no such parameter to pass.
+            coglContext = null;
+        }
+    }
+    return coglContext;
+}
+
+/** An ImageContent sized to the pixbuf, whichever way this Shell spells it.
+ *
+ * Two signatures have to be tolerated, and neither can be detected by asking:
+ *
+ *   - `new_with_preferred_size` takes two numbers on some versions and a
+ *     `Graphene.Size` on others. Passing numbers to the latter fails with
+ *     "Wrong type number; boxed type GrapheneSize expected", which is exactly
+ *     what a real install reported.
+ *   - `set_bytes` gained a leading `Cogl.Context` in GNOME 48.
+ *
+ * Both are tried in turn rather than version-checked: the manifest spans 45 to
+ * 51, a version check would be a second thing to keep correct, and a throw here
+ * takes the whole extension down.
+ */
+function newImageContent(width, height) {
+    try {
+        return St.ImageContent.new_with_preferred_size(width, height);
+    } catch (_e) {
+        // The boxed-size form. Constructed by property so this file does not
+        // have to import Graphene just to build one.
+        return new St.ImageContent({
+            preferred_width: width,
+            preferred_height: height,
+        });
+    }
+}
+
+function setContentBytes(content, bytes, format, width, height, rowstride) {
+    const context = getCoglContext();
+    if (context) {
+        try {
+            content.set_bytes(context, bytes, format, width, height, rowstride);
+            return;
+        } catch (_e) {
+            // Fall through to the older four-argument form.
+        }
+    }
+    content.set_bytes(bytes, format, width, height, rowstride);
+}
+
 /** Content ready to assign, with the pixel size that goes with it.
  *
  * Matches the pattern GNOME Shell's own screenshot UI uses: an ImageContent
@@ -34,8 +97,9 @@ const MAX_FRAMES = 240;
 function frameFromPixbuf(pixbuf, delay) {
     const width = pixbuf.get_width();
     const height = pixbuf.get_height();
-    const content = St.ImageContent.new_with_preferred_size(width, height);
-    content.set_bytes(
+    const content = newImageContent(width, height);
+    setContentBytes(
+        content,
         pixbuf.read_pixel_bytes(),
         pixbuf.get_has_alpha() ? Cogl.PixelFormat.RGBA_8888 : Cogl.PixelFormat.RGB_888,
         width,
@@ -149,7 +213,16 @@ class Sprite extends St.Widget {
         this._path = path;
         this._stopTimer();
         this._index = 0;
-        this._sourceFrames = decodeFrames(path);
+        // A sprite that cannot be decoded must cost the numbers nothing. This
+        // is the one place the extension touches an API whose signature moved
+        // between the versions the manifest claims, and an uncaught throw here
+        // takes the whole panel down — usage tracker included — over a picture.
+        try {
+            this._sourceFrames = decodeFrames(path);
+        } catch (error) {
+            logError(error, `PokeTokenBar: could not decode ${path}`);
+            this._sourceFrames = [];
+        }
         this._frames = capFrameRate(this._sourceFrames, frameFloor(this._quality));
 
         if (this._frames.length === 0) {

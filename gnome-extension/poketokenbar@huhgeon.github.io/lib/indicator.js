@@ -163,10 +163,16 @@ class Indicator extends PanelMenu.Button {
 
     _renderPanel(state) {
         const panel = state?.panel;
-        this._sprite.setQuality(state?.config?.animation_quality ?? DEFAULT_QUALITY);
+        // The sprite is decoration; the percentages are the point. Keep one
+        // from taking the other with it.
+        try {
+            this._sprite.setQuality(state?.config?.animation_quality ?? DEFAULT_QUALITY);
+            this._sprite.setPath(panel?.sprite_path || null);
+        } catch (error) {
+            logError(error, 'PokeTokenBar: panel sprite');
+        }
         const companion = state?.companion;
 
-        this._sprite.setPath(panel?.sprite_path || null);
         // The egg has no sprite of its own, so its percentage stands in —
         // leaving the slot blank until the first hatch reads as broken.
         const eggText = !panel?.sprite_path && companion?.label ? companion.label : '';
