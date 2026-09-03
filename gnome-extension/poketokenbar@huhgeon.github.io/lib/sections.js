@@ -36,6 +36,18 @@ class Section extends St.BoxLayout {
     clear() {
         this.destroy_all_children();
     }
+
+    /** The popup closed, or another tab took over: nothing here is on screen.
+     *
+     * Dropping the children is what actually stops the animating sprites among
+     * them — every Sprite kills its own timer on destroy — and it frees the
+     * textures they uploaded. A section that is not visible was otherwise still
+     * running a timer per sprite inside the compositor, which for the Pokedex
+     * grid is two dozen of them.
+     */
+    release() {
+        this.clear();
+    }
 });
 
 // MARK: Home
@@ -52,12 +64,42 @@ class HomeSection extends Section {
             x_align: Clutter.ActorAlign.CENTER,
         });
         this._spriteHolder.set_child(this._sprite);
+        // Nothing else owns the holder while it sits out of the tree, so this
+        // object has to be the one that frees it.
+        this.connect('destroy', () => {
+            if (!this._spriteHolder.get_parent())
+                this._spriteHolder.destroy();
+        });
+    }
+
+    /** Take the companion sprite out of the tree before the rest is destroyed.
+     *
+     * The base clear() destroys every child, and from the first update onwards
+     * the sprite holder is one of them — so the second update reached a
+     * disposed St.Bin ("impossible to access it") and the Home tab stopped
+     * rendering from then on. Removing it drops the parent's reference while
+     * this object keeps its own, which is what "held across updates" was meant
+     * to mean all along.
+     */
+    clear() {
+        if (this._spriteHolder.get_parent() === this)
+            this.remove_child(this._spriteHolder);
+        super.clear();
+    }
+
+    release() {
+        super.release();
+        // The holder survives clear(), so its sprite has to be told directly.
+        this._sprite.setPaused(true);
     }
 
     update(state) {
         this.clear();
         const t = key => this._reader.text(key);
         const companion = state?.companion;
+        // Without a companion the holder stays out of the tree, and a sprite
+        // nobody can see must not keep asking for frames.
+        this._sprite.setPaused(!companion);
 
         // The daemon holds a celebration for exactly one poll, so it shows
         // once rather than staying up until the next hatch.

@@ -77,19 +77,33 @@ class Meter extends St.Widget {
         this._fill = new St.Widget({style_class: 'poketokenbar-meter-fill'});
         this.add_child(this._fill);
         this._fraction = 0;
-        this.connect('notify::width', () => this._layoutFill());
     }
 
     /** `fraction` is 0..1; anything past 1 is clamped so a full bar stays full. */
     setFraction(fraction, level = 'ok') {
         this._fraction = Math.max(0, Math.min(1, fraction || 0));
         this._fill.style_class = `poketokenbar-meter-fill ${levelClass(level)}`;
-        this._layoutFill();
+        this.queue_relayout();
     }
 
-    _layoutFill() {
-        const width = this.get_width();
-        this._fill.set_size(Math.round(width * this._fraction), this.get_height());
+    /**
+     * The fill is sized from the allocation, not measured when it is set.
+     *
+     * Every caller fills a meter in before adding it to its section, so asking
+     * `get_width()` there measures an actor that is not in the tree yet — which
+     * makes St log `st_widget_get_theme_node called on the widget ... which is
+     * not in the stage` for each meter on each poll. Sizing here instead is
+     * also simply the right place: the width is not known until then.
+     */
+    vfunc_allocate(box) {
+        super.vfunc_allocate(box);
+        const height = box.get_height();
+        this._fill.allocate(new Clutter.ActorBox({
+            x1: 0,
+            y1: 0,
+            x2: Math.round(box.get_width() * this._fraction),
+            y2: height,
+        }));
     }
 });
 

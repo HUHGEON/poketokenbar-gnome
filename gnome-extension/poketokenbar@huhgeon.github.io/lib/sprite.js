@@ -151,6 +151,42 @@ export function decodeFrames(path) {
     return frames;
 }
 
+/* Decoded frames, keyed by path.
+ *
+ * Rebuilding a section makes fresh Sprite actors for files that have not
+ * changed — the Pokedex grid alone is 24 of them — and decoding one Gen-V GIF
+ * means uploading ~55 textures. Clutter content is refcounted and shareable
+ * between actors, so a second Sprite on the same path can simply be handed the
+ * frames the first one decoded.
+ */
+const frameCache = new Map();
+
+// Bounded because the entries are textures living in the compositor, and a
+// full Pokedex is a thousand species. Comfortably more than one popup shows.
+const MAX_CACHED_SPRITES = 96;
+
+function cachedFrames(path) {
+    if (frameCache.has(path)) {
+        // Re-inserted so the least recently used entry is the one that goes:
+        // Map iterates in insertion order.
+        const frames = frameCache.get(path);
+        frameCache.delete(path);
+        frameCache.set(path, frames);
+        return frames;
+    }
+    const frames = decodeFrames(path);
+    frameCache.set(path, frames);
+    if (frameCache.size > MAX_CACHED_SPRITES)
+        frameCache.delete(frameCache.keys().next().value);
+    return frames;
+}
+
+/** Drop every decoded sprite. Called from disable(): the textures are held in
+ * the compositor's memory, and a disabled extension must not be holding any. */
+export function clearFrameCache() {
+    frameCache.clear();
+}
+
 /**
  * An actor that plays a decoded sprite.
  *
@@ -208,7 +244,7 @@ class Sprite extends St.Widget {
         // between the versions the manifest claims, and an uncaught throw here
         // takes the whole panel down — usage tracker included — over a picture.
         try {
-            this._sourceFrames = decodeFrames(path);
+            this._sourceFrames = cachedFrames(path);
         } catch (error) {
             logError(error, `PokeTokenBar: could not decode ${path}`);
             this._sourceFrames = [];

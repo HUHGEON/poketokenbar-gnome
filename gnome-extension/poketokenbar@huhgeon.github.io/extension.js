@@ -18,6 +18,7 @@ import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/ex
 import * as Config from './lib/config.js';
 import {DesktopPet} from './lib/pet.js';
 import {Indicator} from './lib/indicator.js';
+import {clearFrameCache} from './lib/sprite.js';
 import {StateReader, bindTranslations} from './lib/state.js';
 
 // Matches config.py's default pet size, and the size the daemon persists.
@@ -57,6 +58,11 @@ export default class PokeTokenBarExtension extends Extension {
 
         this._indicator?.destroy();
         this._indicator = null;
+
+        // Decoded sprites are textures in the compositor. Nothing is drawing
+        // them once the actors are gone, so holding them would be a leak that
+        // survives every disable/enable cycle.
+        clearFrameCache();
     }
 
     /** Create, update or remove the pet to match the daemon's settings. */

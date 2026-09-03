@@ -96,8 +96,11 @@ class Indicator extends PanelMenu.Button {
         // Animation is the compositor's cost, and nobody is watching a closed
         // popup — but the panel sprite keeps running, since that one is visible.
         this.menu.connect('open-state-changed', (_menu, open) => {
-            for (const [name, section] of Object.entries(this._sections))
+            for (const [name, section] of Object.entries(this._sections)) {
                 section.visible = open && name === this._currentTab;
+                if (!open)
+                    section.release();
+            }
             if (open)
                 this._render();
         });
@@ -132,8 +135,13 @@ class Indicator extends PanelMenu.Button {
 
     _selectTab(name) {
         this._currentTab = name;
-        for (const [key, section] of Object.entries(this._sections))
+        for (const [key, section] of Object.entries(this._sections)) {
             section.visible = key === name;
+            // The tab that just went away keeps animating otherwise: its
+            // sprites are still in the tree, still on their own timers.
+            if (key !== name)
+                section.release();
+        }
         this._render();
     }
 
@@ -153,9 +161,13 @@ class Indicator extends PanelMenu.Button {
     _render() {
         const state = this._reader.state;
         this._renderPanel(state);
-        // Only the visible tab is rebuilt: the others would throw their
-        // children away again before anyone saw them.
-        this._sections[this._currentTab]?.update(state);
+        // Only the visible tab, and only while the popup is actually open. A
+        // rebuild destroys the section's children and decodes every sprite in
+        // it again — the Pokedex grid is two dozen GIFs — and doing that every
+        // two seconds behind a closed menu is compositor load nobody can see.
+        // Opening the menu renders, so nothing is missed by skipping this.
+        if (this.menu.isOpen)
+            this._sections[this._currentTab]?.update(state);
         this._renderFooter(state);
     }
 
