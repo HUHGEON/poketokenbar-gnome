@@ -21,6 +21,7 @@ from .copilot import CopilotProvider
 from .cursor import CursorProvider
 from .grok import GrokProvider
 from .hermes import HermesProvider
+from .kiro import KiroProvider
 from .opencode import OpenCodeProvider
 from .pi import OmpProvider, PiProvider
 
@@ -35,6 +36,7 @@ REGISTRY: list[type] = [
     HermesProvider,
     CopilotProvider,
     CursorProvider,
+    KiroProvider,
 ]
 
 
@@ -64,4 +66,5 @@ __all__ = [
     "HermesProvider",
     "CopilotProvider",
     "CursorProvider",
+    "KiroProvider",
 ]
