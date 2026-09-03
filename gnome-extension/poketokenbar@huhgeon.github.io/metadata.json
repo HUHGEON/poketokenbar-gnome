@@ -2,8 +2,18 @@
   "uuid": "poketokenbar@huhgeon.github.io",
   "name": "PokeTokenBar",
   "description": "Your AI coding tokens, hatched into Pokémon — in the GNOME panel. Reads local Claude Code, Codex, Gemini CLI, Cursor, Copilot and seven other tools' usage through the poketokend daemon.",
-  "shell-version": ["45", "46", "47", "48", "49"],
-  "url": "https://github.com/chattymin/PokeTokenBar",
-  "session-modes": ["user"],
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51"
+  ],
+  "url": "https://github.com/HUHGEON/poketokenbar-gnome",
+  "session-modes": [
+    "user"
+  ],
   "version-name": "0.1.0"
 }

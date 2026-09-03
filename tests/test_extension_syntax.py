@@ -112,3 +112,21 @@ def test_the_stylesheet_is_present():
 def test_no_source_file_is_empty():
     for path in js_files():
         assert path.read_text(encoding="utf-8").strip(), f"{path.name} is empty"
+
+
+def test_the_manifest_covers_the_current_gnome_releases():
+    """An extension whose shell-version omits the running Shell is hidden
+    entirely — no error, no entry in the list, nothing to click.
+
+    This was the first thing a real install hit. GNOME ships twice a year, so
+    the range needs widening on a schedule rather than when someone reports it.
+    """
+    metadata = json.loads((EXTENSION_DIR / "metadata.json").read_text(encoding="utf-8"))
+    declared = {int(v) for v in metadata["shell-version"]}
+    # 45 is where ESM extensions begin; anything older needs a different entry
+    # point entirely.
+    assert min(declared) == 45
+    # Contiguous: a gap silently excludes that release.
+    assert declared == set(range(min(declared), max(declared) + 1))
+    # Current stable at the time of writing is 50, with 51 due September 2026.
+    assert max(declared) >= 51

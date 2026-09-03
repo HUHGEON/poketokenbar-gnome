@@ -46,9 +46,25 @@ install_gnome() {
   local dest="$HOME/.local/share/gnome-shell/extensions/$extension_uuid"
   echo "==> installing GNOME Shell extension to $dest"
   copy_tree "$here/gnome-extension/$extension_uuid" "$dest"
+
+  # The commonest way this "installs fine" and then does not appear: an
+  # extension whose shell-version omits the running Shell is hidden outright —
+  # no error and no entry in the list. Say so here rather than let someone hunt.
+  local running declared
+  running="$(gnome-shell --version 2>/dev/null | grep -oE '[0-9]+' | head -1 || true)"
+  declared="$(grep -o '"[0-9]\+"' "$dest/metadata.json" | tr -d '"' | tr '\n' ' ')"
+  if [ -n "$running" ] && ! echo " $declared " | grep -q " $running "; then
+    echo
+    echo "    !! this GNOME Shell is $running, and the extension declares: $declared"
+    echo "       it will not appear in the list until that version is added to"
+    echo "       $dest/metadata.json — please open an issue with your version."
+    echo
+  fi
+
   echo "    enable it in the Extensions app, or:"
   echo "      gnome-extensions enable $extension_uuid"
   echo "    on Xorg press Alt+F2 then r to reload the shell; on Wayland log out and back in."
+  echo "    if it does not appear:  journalctl --user -b -o cat /usr/bin/gnome-shell | tail -40"
 }
 
 install_plasma() {
