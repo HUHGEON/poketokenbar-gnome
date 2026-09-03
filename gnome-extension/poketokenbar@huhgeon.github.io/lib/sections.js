@@ -271,6 +271,31 @@ class HomeSection extends Section {
 
 // MARK: Shop and Bag
 
+// How big an item's picture is drawn in the shop and the bag.
+const ITEM_ICON_SIZE = 32;
+
+/** The picture for one shop or bag row.
+ *
+ * Takes the two values rather than the row, so the field names stay where the
+ * contract test can see which block they were read from.
+ *
+ * The daemon ships a sprite for the items that have one and an emoji for the
+ * rest — an egg is a glyph, a Rare Candy is a picture — and both were being
+ * dropped on the floor, which left the shop as a wall of text. A sprite that
+ * fails to decode hides itself, and that is the third case: the emoji is the
+ * fallback, not the second choice.
+ */
+function itemIcon(spritePath, emoji) {
+    if (spritePath) {
+        const sprite = new Sprite({size: ITEM_ICON_SIZE});
+        sprite.setPath(spritePath);
+        if (sprite.visible)
+            return sprite;
+        sprite.destroy();
+    }
+    return label(emoji || '', 'poketokenbar-item-emoji');
+}
+
 export const ShopSection = GObject.registerClass(
 class ShopSection extends Section {
     _init(reader) {
@@ -288,13 +313,14 @@ class ShopSection extends Section {
         this.add_child(label(t('spend_hint'), 'poketokenbar-subtle'));
 
         for (const shopItem of state?.shop ?? []) {
+            const icon = itemIcon(shopItem.sprite_path, shopItem.emoji);
             const left = column([
                 label(shopItem.label || shopItem.key, 'poketokenbar-key'),
                 label(shopItem.description ?? '', 'poketokenbar-subtle'),
             ]);
             const spacer = new St.Widget({x_expand: true});
             const price = label(shopItem.price_text ?? '', 'poketokenbar-value');
-            const children = [left, spacer];
+            const children = [icon, left, spacer];
             if (shopItem.owned_count > 0)
                 children.push(badge(`${t('owned')} x${shopItem.owned_count}`));
             children.push(price);
@@ -331,13 +357,14 @@ class BagSection extends Section {
             return;
         }
         for (const bagItem of items) {
+            const icon = itemIcon(bagItem.sprite_path, bagItem.emoji);
             const left = column([
                 label(`${bagItem.label || bagItem.key} ×${bagItem.count ?? 0}`,
                     'poketokenbar-key'),
                 label(bagItem.effect || bagItem.description || '', 'poketokenbar-subtle'),
             ]);
             const spacer = new St.Widget({x_expand: true});
-            const children = [left, spacer];
+            const children = [icon, left, spacer];
             if (bagItem.usable)
                 children.push(button(t('use'), () => Commands.use(bagItem.key)));
             else if (bagItem.passive)
