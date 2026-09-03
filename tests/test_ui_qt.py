@@ -283,3 +283,44 @@ def test_the_language_choice_matches_the_daemon_catalogue():
 
     choices = dict((key, options) for key, _label, options in panels.SettingsPanel.CHOICES)
     assert list(choices["language"]) == list(l10n.LANGUAGES)
+
+
+def test_tab_labels_arrive_with_the_catalogue(qt_app, payload):
+    """The tabs are created before the first successful read, when `text()` still
+    returns the key — so without a re-label they read "home", "shop", "bag" in
+    lower case forever, and a language change never reaches them.
+    """
+    subject = StateReader()
+    window = Window(subject)
+    assert window.tabs.tabText(0) == "home", "no catalogue yet, so the key stands in"
+
+    subject.state = payload
+    window.refresh(payload)
+    assert window.tabs.tabText(0) == payload["strings"]["home"]
+    assert window.tabs.tabText(0) != "home"
+
+
+def test_tab_labels_follow_a_language_change(qt_app, payload):
+    """The daemon resolves every string, so switching language must land on the
+    next poll without anything being rebuilt."""
+    from poketokenbar import l10n
+
+    subject = StateReader()
+    subject.state = payload
+    window = Window(subject)
+    window.refresh(payload)
+    english = window.tabs.tabText(0)
+
+    subject.state = dict(payload, strings=l10n.catalogue("ko"))
+    window.refresh(subject.state)
+    assert window.tabs.tabText(0) != english
+    assert window.tabs.tabText(0) == l10n.catalogue("ko")["home"]
+
+
+def test_the_settings_tab_keeps_its_own_name(qt_app, payload):
+    """It is the extension's own word, not one the daemon ships."""
+    subject = StateReader()
+    subject.state = payload
+    window = Window(subject)
+    window.refresh(payload)
+    assert window.tabs.tabText(window.tabs.count() - 1) == "Settings"

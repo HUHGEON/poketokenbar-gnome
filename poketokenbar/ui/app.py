@@ -54,13 +54,31 @@ class Window(QWidget):
             "settings": SettingsPanel(reader),
         }
         for key, panel in self.panels.items():
-            self.tabs.addTab(panel, reader.text(key) if key != "settings" else "Settings")
+            self.tabs.addTab(panel, self._tab_title(key))
         layout.addWidget(self.tabs)
 
         self.footer = label("", dim=True)
         layout.addWidget(self.footer)
 
+    def _tab_title(self, key: str) -> str:
+        # "Settings" is the extension's own word; the rest come from the
+        # daemon's catalogue.
+        return "Settings" if key == "settings" else self.reader.text(key)
+
+    def _retitle_tabs(self) -> None:
+        """Re-label the tabs from the current catalogue.
+
+        They are created before the first successful read, when `text()` still
+        returns the key itself — so without this the tabs read "home", "shop",
+        "bag" in lower case forever, and a language change never reaches them.
+        """
+        for index, key in enumerate(self.panels):
+            title = self._tab_title(key)
+            if self.tabs.tabText(index) != title:
+                self.tabs.setTabText(index, title)
+
     def refresh(self, state: dict | None) -> None:
+        self._retitle_tabs()
         # Only the visible tab is rebuilt: the others would throw their children
         # away again before anyone saw them.
         current = self.tabs.currentWidget()

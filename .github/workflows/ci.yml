@@ -79,3 +79,45 @@ jobs:
           "$HOME/.local/bin/poketokenctl" refresh
           "$HOME/.local/bin/poketokenctl" scan-roots gemini /tmp/example
           cat "$HOME/.config/poketokenbar/config.json"
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install pytest PySide6-Essentials
+
+      # The whole suite, on the platform itself. platform_paths injects the
+      # system so all three mappings are checked from anywhere, but only here
+      # is the real one exercised.
+      - name: Tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q
+
+      - name: The daemon resolves its paths under the user profile
+        run: python tools/windows_check_paths.py
+
+      # The point of the whole port: real log files on a real Windows
+      # filesystem, read by the same parsers, aggregated into a real state.json.
+      - name: One poll, end to end
+        run: python tools/windows_check_poll.py
+
+      - name: The tray application constructs
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tools/windows_check_tray.py
+
+      - name: The installer parses under the PowerShell that will run it
+        shell: pwsh
+        run: |
+          $errs = $null
+          foreach ($f in @('packaging/windows/install.ps1', 'packaging/windows/uninstall.ps1')) {
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $f), [ref]$null, [ref]$errs) | Out-Null
+            if ($errs.Count) { $errs; exit 1 }
+            Write-Host "$f OK"
+          }
