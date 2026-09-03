@@ -16,7 +16,7 @@ import * as Config from './config.js';
 import {LANGUAGES} from './languages.js';
 import {Sprite} from './sprite.js';
 import {
-    Meter, ago, badge, button, column, heading, label, levelClass, placeholder,
+    Meter, badge, button, column, heading, label, levelClass, placeholder,
     resetsIn, row, statLine, toggleRow,
 } from './widgets.js';
 

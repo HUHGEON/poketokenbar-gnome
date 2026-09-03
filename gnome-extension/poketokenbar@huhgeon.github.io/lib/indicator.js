@@ -5,7 +5,6 @@
  * in tabs that mirror the macOS app's.
  */
 
-import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';

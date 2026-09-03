@@ -157,3 +157,86 @@ def test_no_caller_options_are_spread_into_a_gobject_constructor():
         f"{offenders}. Destructure your own keys out first — a name that "
         "collides with a real property fails at construction."
     )
+
+
+# MARK: identifiers
+
+
+# Names that exist without being imported: GJS globals, JavaScript built-ins,
+# and the handful the Shell injects.
+_AMBIENT = {
+    "Math", "JSON", "Object", "Array", "String", "Number", "Boolean", "Date",
+    "Error", "TypeError", "Promise", "Set", "Map", "RegExp", "Symbol",
+    "TextDecoder", "TextEncoder", "Infinity", "NaN",
+    # GJS
+    "imports", "log", "logError", "print", "printerr", "globalThis", "global",
+    "ARGV", "pkg",
+}
+
+
+def _imported_names(source: str) -> set[str]:
+    names = set()
+    # import X from '...'
+    names.update(re.findall(r"^import\s+(\w+)\s+from", source, re.M))
+    # import * as X from '...'
+    names.update(re.findall(r"^import\s+\*\s+as\s+(\w+)\s+from", source, re.M))
+    # import {A, B as C} from '...'
+    for group in re.findall(r"^import\s+\{([^}]*)\}\s+from", source, re.M | re.S):
+        for part in group.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            names.add(part.split(" as ")[-1].strip())
+    return names
+
+
+def _declared_names(source: str) -> set[str]:
+    names = set()
+    names.update(re.findall(r"\b(?:const|let|var)\s+(\w+)", source))
+    names.update(re.findall(r"\bfunction\s+(\w+)", source))
+    names.update(re.findall(r"\bclass\s+(\w+)", source))
+    # export const X = GObject.registerClass(class X extends ...)
+    names.update(re.findall(r"^export\s+(?:const|let|function|class)\s+(\w+)", source, re.M))
+    # destructuring: const {a, b} = ...
+    for group in re.findall(r"(?:const|let|var)\s*\{([^}]*)\}\s*=", source):
+        for part in group.split(","):
+            part = part.strip().split(":")[-1].split("=")[0].strip().lstrip(".")
+            if part.isidentifier():
+                names.add(part)
+    return names
+
+
+@pytest.mark.parametrize("path", js_files(), ids=lambda p: p.name)
+def test_every_namespace_used_is_imported(path):
+    """A namespace used but not imported is a ReferenceError at load.
+
+    This is the failure mode that matters most here, because it cannot be seen
+    by reading and there is no Shell available to run into it: removing an
+    import while leaving one use behind leaves an extension that parses
+    perfectly and then does not start.
+    """
+    source = path.read_text(encoding="utf-8")
+    source = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
+    source = re.sub(r"//[^\n]*", "", source)
+    source = re.sub(r"'[^'\n]*'|\"[^\"\n]*\"|`[^`]*`", "''", source, flags=re.S)
+
+    known = _imported_names(source) | _declared_names(source) | _AMBIENT
+    # A capitalised name followed by a dot is a namespace or a class in use.
+    used = set(re.findall(r"(?<![.\w])([A-Z]\w*)\s*\.", source))
+    # Class bodies refer to their own name via `extends`, and to enum-like
+    # constants declared in the same file.
+    missing = used - known
+    assert not missing, f"{path.name} uses {sorted(missing)} without importing it"
+
+
+@pytest.mark.parametrize("path", js_files(), ids=lambda p: p.name)
+def test_no_import_is_left_unused(path):
+    """An unused import is dead weight, and usually the leftover of a change
+    that removed the last use — which is worth noticing while it is still
+    harmless rather than after the reverse mistake."""
+    source = path.read_text(encoding="utf-8")
+    source = re.sub(r"^import[^;]*;", "", source, flags=re.M | re.S)
+    for name in _imported_names(path.read_text(encoding="utf-8")):
+        assert re.search(rf"(?<![.\w]){re.escape(name)}\b", source), (
+            f"{path.name} imports {name} and never uses it"
+        )
