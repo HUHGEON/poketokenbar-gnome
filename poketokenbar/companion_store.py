@@ -171,6 +171,56 @@ class CompanionStore:
         path = self.sprites.path(mon.current_id, animated=True, shiny=mon.is_shiny)
         return str(path) if path else ""
 
+    def panel_species(self) -> tuple[int | None, bool]:
+        """What the panel and the desktop pet show: the pin, else the companion.
+
+        While a species is pinned the panel stops following the egg, the hatch
+        and the evolutions — Home still shows all of it.
+        """
+        self.state.reconcile_representative()
+        pinned = self.state.representative_species_id
+        if pinned is not None:
+            return pinned, self.state.owns_shiny_species(pinned)
+        mon = self.state.active
+        if mon is None:
+            return None, False
+        return mon.current_id, mon.is_shiny
+
+    def panel_sprite_path(self) -> str:
+        species_id, shiny = self.panel_species()
+        if species_id is None or self.sprites is None:
+            return ""
+        path = self.sprites.path(species_id, animated=True, shiny=shiny)
+        return str(path) if path else ""
+
+    def set_representative(self, species_id: int | None) -> str:
+        """Pin a species to the panel, or clear the pin with None.
+
+        Refuses a species the user does not own rather than storing it and
+        letting reconcile silently drop it — the caller gets told why.
+        """
+        if species_id is not None and not self.state.owns_species(species_id):
+            raise ValueError(f"species {species_id} is not in your Pokedex")
+        self.state.representative_species_id = species_id
+        self._persist()
+        if species_id is None:
+            return "panel follows your companion again"
+        return f"panel pinned to #{species_id}"
+
+    def _panel_fields(self) -> dict:
+        """Panel and pet sprite, which the pin overrides.
+
+        Shipped alongside the companion rather than replacing it: Home reads the
+        companion's own sprite, so pinning must not hide what is being raised.
+        """
+        species_id, shiny = self.panel_species()
+        return {
+            "panel_species_id": species_id,
+            "panel_is_shiny": shiny,
+            "panel_sprite_path": self.panel_sprite_path(),
+            "representative_species_id": self.state.representative_species_id,
+        }
+
     def payload(self, today_tokens: int = 0, limit_warning: bool = False) -> dict:
         """Companion section of state.json."""
         kind = companion.display_state(self.state, today_tokens, limit_warning)
@@ -189,6 +239,7 @@ class CompanionStore:
                 "spendable_text": _compact(self.state.spendable_tokens),
                 "display_state": kind,
                 "status_message": l10n.t(f"status_{kind.lower()}", self.state.language),
+                **self._panel_fields(),
             }
 
         threshold = balance.phase_threshold(mon.rarity, mon.total_forms, mon.stage_index)
@@ -233,6 +284,7 @@ class CompanionStore:
             "spendable_text": _compact(self.state.spendable_tokens),
             "display_state": kind,
             "status_message": l10n.t(f"status_{kind.lower()}", self.state.language),
+            **self._panel_fields(),
         }
 
     # --- economy -----------------------------------------------------------

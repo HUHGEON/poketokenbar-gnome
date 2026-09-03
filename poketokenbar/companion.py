@@ -92,6 +92,10 @@ class CompanionState:
     claimed_today_tokens_by_provider: dict[str, int] | None = None
     last_date: str = ""
     active: MonState | None = None
+    # Species pinned to the panel and the desktop pet. None follows whatever is
+    # being raised (or the egg). A species, not an individual: nature and the
+    # rest belong to the companion, which Home keeps showing either way.
+    representative_species_id: int | None = None
     dex: list[DexEntry] = field(default_factory=list)
     collected_finals: set[str] = field(default_factory=set)
     language: str = "en"
@@ -102,6 +106,52 @@ class CompanionState:
     @property
     def spendable_tokens(self) -> int:
         return max(0, self.used_since_install - self.spent_tokens)
+
+    def reached_species(self) -> list[int]:
+        """Stages the current companion has actually reached.
+
+        Not the whole planned line: a form it has not evolved into yet is not
+        something anyone owns.
+        """
+        if self.active is None:
+            return []
+        return list(self.active.path_ids[: self.active.stage_index + 1])
+
+    def owns_species(self, species_id: int) -> bool:
+        """Whether a graduation record or the current companion covers this species.
+
+        A light path on purpose — checking one species must not build the whole
+        Pokedex display model.
+        """
+        if any(species_id in entry.chain_order for entry in self.dex):
+            return True
+        return species_id in self.reached_species()
+
+    def owns_shiny_species(self, species_id: int) -> bool:
+        """Whether the owned copy of this species is shiny.
+
+        A Ditto still in disguise keeps its shininess hidden until it reveals —
+        the panel must not spoil the reveal.
+        """
+        if any(e.is_shiny and species_id in e.chain_order for e in self.dex):
+            return True
+        active = self.active
+        if active is None or not active.is_shiny:
+            return False
+        if species_id not in self.reached_species():
+            return False
+        return active.ditto_disguise is None or active.ditto_revealed
+
+    def reconcile_representative(self) -> None:
+        """Drop a pin that no longer names a species the user owns.
+
+        Buying a fresh egg, a Ditto revealing itself, or a hand-edited save
+        would otherwise leave a ghost species on the panel permanently.
+        """
+        if self.representative_species_id is None:
+            return
+        if not self.owns_species(self.representative_species_id):
+            self.representative_species_id = None
 
 
 @dataclass(slots=True)

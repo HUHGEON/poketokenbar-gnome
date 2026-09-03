@@ -96,6 +96,15 @@ class Daemon:
                         self.notifier._send("PokeTokenBar", message)
                 except Exception as exc:
                     errors.append(f"{name}: {exc}")
+            elif name == "represent" and self.companion_store is not None:
+                raw = (command.get("args") or {}).get("species_id")
+                try:
+                    species_id = None if raw in (None, "", "none") else int(raw)
+                    message = self.companion_store.set_representative(species_id)
+                    if self.notifier is not None:
+                        self.notifier._send("PokeTokenBar", message)
+                except (TypeError, ValueError) as exc:
+                    errors.append(f"represent: {exc}")
             elif name in ("buy", "use") and self.companion_store is not None:
                 key = (command.get("args") or {}).get("key", "")
                 try:

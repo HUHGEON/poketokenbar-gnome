@@ -11,7 +11,8 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv:
         print("usage: poketokenctl {set <key> <value>|scan-roots <provider> <paths>|"
-              "refresh|buy <key>|use <key>|export <path>|import <path>}",
+              "represent <species-id|none>|refresh|buy <key>|use <key>|"
+              "export <path>|import <path>}",
               file=sys.stderr)
         return 2
 
@@ -39,6 +40,13 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 1
         commands.enqueue("reload_config", {})
+        return 0
+
+    if action == "represent":
+        if len(rest) != 1:
+            print("usage: poketokenctl represent <species-id|none>", file=sys.stderr)
+            return 2
+        commands.enqueue("represent", {"species_id": rest[0]})
         return 0
 
     if action == "refresh":

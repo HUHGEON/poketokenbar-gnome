@@ -116,6 +116,8 @@ def decode(raw: dict) -> CompanionState:
     state.spent_tokens = _lenient(raw, "spent_tokens", int, 0)
     state.egg_usage = _lenient(raw, "egg_usage", int, 0)
     state.egg_tier = _optional_rarity(raw.get("egg_tier"))
+    representative = raw.get("representative_species_id")
+    state.representative_species_id = representative if isinstance(representative, int) else None
     state.pending_hatch_id = (
         raw.get("pending_hatch_id") if isinstance(raw.get("pending_hatch_id"), int) else None
     )
@@ -176,6 +178,7 @@ def encode(state: CompanionState) -> dict:
         "claimed_today_tokens_by_provider": state.claimed_today_tokens_by_provider,
         "last_date": state.last_date,
         "active": mon(state.active),
+        "representative_species_id": state.representative_species_id,
         "dex": [
             {
                 "base_id": d.base_id,
