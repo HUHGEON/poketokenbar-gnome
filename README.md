@@ -26,14 +26,21 @@ companion is a precise usage tracker — today's spend and cost, and the officia
 
 ## Status
 
-Work in progress. The daemon is complete and tested; the GNOME Shell extension
-is being written.
+Feature-complete and under CI, but **not yet run on a real GNOME desktop.**
 
 | | |
 |---|---|
-| Usage daemon (12 providers) | ✅ done, 538 tests |
-| GNOME Shell extension | 🚧 in progress |
-| Verified on a real GNOME desktop | ❌ not yet |
+| Usage daemon (12 providers) | ✅ done |
+| GNOME Shell extension | ✅ written |
+| Test suite | ✅ 601 tests, green on CI |
+| Install verified from a clean checkout | ✅ in CI |
+| Verified on a real GNOME desktop | ❌ **not yet** |
+
+That last row is the honest one. Every field the extension reads is compared
+mechanically against a real daemon payload, and its JavaScript is parsed on
+every push, so a wrong name or a stray character cannot reach you. What no
+check here can tell you is whether an actor renders where it should. If you run
+GNOME, that is exactly the report worth opening an issue for.
 
 ## Supported tools
 
