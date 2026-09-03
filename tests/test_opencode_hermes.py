@@ -95,14 +95,20 @@ def test_opencode_zero_cost_is_not_recorded_as_a_charge(tmp_path):
     assert opencode.parse_message(payload, "x").explicit_cost is None
 
 
-def opencode_root(tmp_path):
-    """Where the provider will actually look on this platform, not where Linux
-    happens to put it."""
-    return opencode.roots(home=tmp_path, env={})[0]
+@pytest.fixture
+def opencode_dir(tmp_path, monkeypatch):
+    """A store the provider is pointed at, on any platform.
+
+    Computing the default instead let the fixture and the provider disagree:
+    one asked with an empty environment, the other with the real one.
+    """
+    root = tmp_path / "opencode-data"
+    monkeypatch.setenv("OPENCODE_DATA_DIR", str(root))
+    return root
 
 
-def test_opencode_legacy_message_files_are_read(tmp_path):
-    root = opencode_root(tmp_path) / "storage" / "message"
+def test_opencode_legacy_message_files_are_read(tmp_path, opencode_dir):
+    root = opencode_dir / "storage" / "message"
     root.mkdir(parents=True)
     (root / "msg-1.json").write_text(json.dumps(OPENCODE_PAYLOAD), encoding="utf-8")
 
@@ -116,8 +122,9 @@ def test_opencode_payload_without_provider_is_not_a_billed_message():
     assert opencode.parse_message(payload, "x") is None
 
 
-def test_opencode_named_channel_database_is_used_when_standard_is_absent(tmp_path):
-    root = opencode_root(tmp_path)
+def test_opencode_named_channel_database_is_used_when_standard_is_absent(
+        tmp_path, opencode_dir):
+    root = opencode_dir
     root.mkdir(parents=True)
     execute(
         root / "opencode-nightly.db",

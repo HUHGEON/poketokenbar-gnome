@@ -135,9 +135,11 @@ def test_every_base_resolves_on_every_platform(function, system):
     """
     result = function(HOME, {}, system)
     assert isinstance(result, Path)
-    text = str(result)
+    # Compared as posix: `str()` on a Windows Path renders "/tmp" as "\\tmp",
+    # so the separator has to be normalised before any prefix check.
+    text = result.as_posix()
     assert text and text not in (".", "")
-    assert text.startswith(str(HOME)) or text.startswith("/"), result
+    assert text.startswith(HOME.as_posix()) or text.startswith("/"), result
 
 
 def test_an_empty_override_is_ignored_not_obeyed():

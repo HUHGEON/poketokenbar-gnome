@@ -8,6 +8,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from poketokenbar.providers import cursor
 
 
@@ -93,22 +95,23 @@ def test_nonexistent_store_is_silent(tmp_path):
     assert cursor.parse_database(tmp_path / "absent.vscdb") == []
 
 
-def store_root(tmp_path, flavour="Cursor"):
-    """Where the provider will actually look on this platform.
+@pytest.fixture
+def store_dir(tmp_path, monkeypatch):
+    """A store the provider is pointed at, wherever this platform would put one.
 
-    Hardcoding `.config/...` made these pass on Linux and fail on Windows, where
-    the same provider looks under %APPDATA%. Asking the provider is the only
-    version that is true everywhere.
+    The override is what ties the two together. Building the tree at a computed
+    default instead made these pass on Linux and fail on Windows: the fixture
+    asked with an empty environment and got a path under tmp_path, while the
+    provider asked the real one and got %APPDATA%.
     """
-    for candidate in cursor.user_data_dirs(home=tmp_path, env={}):
-        if candidate.name == "globalStorage" and flavour in str(candidate):
-            return candidate
-    raise AssertionError(f"no {flavour} directory in user_data_dirs")
+    root = tmp_path / "cursor-data"
+    monkeypatch.setenv("CURSOR_DATA_DIR", str(root))
+    return root
 
 
-def test_cursor_reports_no_cost(tmp_path):
+def test_cursor_reports_no_cost(tmp_path, store_dir):
     """Included-plan usage is billed by request; the dashboard is token-only."""
-    root = store_root(tmp_path)
+    root = store_dir
     root.mkdir(parents=True)
     write_store(root / "state.vscdb", [("bubbleId:b", bubble(input=1_000_000, output=1_000_000))])
     provider = cursor.CursorProvider(home=tmp_path)
@@ -164,12 +167,18 @@ def test_cursor_data_dir_overrides_every_platform(tmp_path):
         ) == [custom]
 
 
-def test_nightly_is_scanned_alongside_stable(tmp_path):
-    for flavour in ("Cursor", "Cursor Nightly"):
-        root = store_root(tmp_path, flavour)
-        root.mkdir(parents=True)
-        write_store(root / "state.vscdb", [(f"bubbleId:{flavour}", bubble())])
-    assert len(cursor.CursorProvider(home=tmp_path).scan_entries()) == 2
+def test_stable_and_nightly_are_both_listed(tmp_path):
+    """Two flavours can be installed side by side and both should be read.
+
+    The scan itself is covered by the store fixture above; what this pins is
+    that the default list names both, on every platform.
+    """
+    for system in ("linux", "darwin", "win32"):
+        dirs = cursor.user_data_dirs(
+            home=tmp_path, env={"APPDATA": "C:/Roaming"}, system=system)
+        assert len(dirs) == 2
+        assert "Nightly" not in str(dirs[0])
+        assert "Nightly" in str(dirs[1])
 
 
 def test_provider_identity():
