@@ -6,8 +6,9 @@
  * — it runs inside the compositor and puts an actor straight on the stage — so
  * the whole limitation is simply absent here.
  *
- * The actor sits in Main.layoutManager's background group by default, below
- * windows, so it decorates the desktop rather than covering work.
+ * The actor is added to the layout manager's chrome, so it floats above
+ * windows the way the macOS panel does, and steps out of the way of anything
+ * fullscreen.
  */
 
 import Clutter from 'gi://Clutter';

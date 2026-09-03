@@ -17,6 +17,23 @@ export function levelClass(level) {
     return 'poketokenbar-ok';
 }
 
+/**
+ * A vertical St.BoxLayout, whichever way this Shell wants to be told.
+ *
+ * `vertical` is deprecated as of GNOME 48 and slated for removal, and its
+ * replacement `orientation` is not documented as existing in 45. Rather than
+ * pick one and hope, the property that is actually present wins — which is also
+ * the only way one file can serve the whole 45-49 range this extension claims.
+ */
+export function verticalBox(params = {}) {
+    const box = new St.BoxLayout(params);
+    if ('orientation' in box)
+        box.orientation = Clutter.Orientation.VERTICAL;
+    else
+        box.vertical = true;
+    return box;
+}
+
 export function label(text, styleClass = '') {
     return new St.Label({
         text: text ?? '',
@@ -33,7 +50,7 @@ export function row(children, styleClass = 'poketokenbar-row') {
 }
 
 export function column(children, styleClass = 'poketokenbar-column') {
-    const box = new St.BoxLayout({vertical: true, style_class: styleClass});
+    const box = verticalBox({style_class: styleClass});
     for (const child of children)
         box.add_child(child);
     return box;
@@ -84,6 +101,26 @@ export function heading(text) {
 /** Text shown in place of a list that has nothing in it yet. */
 export function placeholder(text) {
     return label(text, 'poketokenbar-placeholder');
+}
+
+/**
+ * A settings row with a label on the left and an on/off control on the right.
+ *
+ * Not PopupSwitchMenuItem: that is a PopupBaseMenuItem and only works inside a
+ * PopupMenu via addMenuItem. Adding one to an St container does not lay out —
+ * the whole settings tab would have rendered as nothing.
+ */
+export function toggleRow(text, value, onToggle) {
+    const control = new St.Button({
+        label: value ? 'on' : 'off',
+        style_class: value ? 'poketokenbar-toggle-on' : 'poketokenbar-toggle-off',
+        can_focus: true,
+        reactive: true,
+        track_hover: true,
+    });
+    control.connect('clicked', () => onToggle(!value));
+    const spacer = new St.Widget({x_expand: true});
+    return row([label(text, 'poketokenbar-key'), spacer, control]);
 }
 
 /**

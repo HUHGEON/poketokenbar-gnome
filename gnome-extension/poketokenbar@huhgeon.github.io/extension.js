@@ -53,8 +53,7 @@ export default class PokeTokenBarExtension extends Extension {
         this._reader?.stop();
         this._reader = null;
 
-        this._pet?.destroy();
-        this._pet = null;
+        this._removePet();
 
         this._indicator?.destroy();
         this._indicator = null;
@@ -67,8 +66,7 @@ export default class PokeTokenBarExtension extends Extension {
         const wanted = Boolean(config.floating_pet_enabled);
 
         if (!wanted) {
-            this._pet?.destroy();
-            this._pet = null;
+            this._removePet();
             return;
         }
 
@@ -82,9 +80,19 @@ export default class PokeTokenBarExtension extends Extension {
                     Config.set('floating_pet_y', y);
                 },
             });
-            // Below windows: the pet decorates the desktop, it does not sit on
-            // top of what someone is working in.
-            Main.layoutManager._backgroundGroup.add_child(this._pet);
+            // Chrome, not the background group. Upstream's pet is a floating
+            // panel above windows — put it in the background and it is hidden
+            // the moment anything is open, which is most of the time. Chrome is
+            // also public API, where _backgroundGroup is private and renders
+            // nothing at all on a secondary monitor.
+            Main.layoutManager.addChrome(this._pet, {
+                // Windows keep their space; the pet floats over it.
+                affectsStruts: false,
+                // It is draggable and clickable, so it has to take input.
+                affectsInputRegion: true,
+                // Out of the way of anything fullscreen, like a video or a game.
+                trackFullscreen: true,
+            });
             const size = Number(config.floating_pet_size) || DEFAULT_PET_SIZE;
             this._pet.setSize(size);
             this._pet.place(
@@ -95,6 +103,20 @@ export default class PokeTokenBarExtension extends Extension {
         this._pet.setSize(Number(config.floating_pet_size) || DEFAULT_PET_SIZE);
         this._pet.update(state);
         this._syncPaused();
+    }
+
+    /** Take the pet back out of chrome before destroying it.
+     *
+     * Dropping the actor without removing it leaves the layout manager holding
+     * a dead reference and its input region still claimed — a disable() that
+     * leaves the desktop swallowing clicks in an empty square.
+     */
+    _removePet() {
+        if (!this._pet)
+            return;
+        Main.layoutManager.removeChrome(this._pet);
+        this._pet.destroy();
+        this._pet = null;
     }
 
     _onPetActivated(_kind) {

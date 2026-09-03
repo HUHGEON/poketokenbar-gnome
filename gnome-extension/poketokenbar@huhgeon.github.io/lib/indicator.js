@@ -19,7 +19,7 @@ import {Sprite} from './sprite.js';
 import {
     BagSection, CollectionSection, HomeSection, SettingsSection, ShopSection,
 } from './sections.js';
-import {ago, button, label, levelClass, row} from './widgets.js';
+import {ago, button, label, levelClass, row, verticalBox} from './widgets.js';
 
 // The popup is a fixed width so the Pokedex grid never reflows mid-browse.
 const POPUP_WIDTH = 380;
@@ -59,8 +59,8 @@ class Indicator extends PanelMenu.Button {
         const item = new PopupMenu.PopupBaseMenuItem({
             reactive: false, can_focus: false, style_class: 'poketokenbar-popup',
         });
-        const content = new St.BoxLayout({
-            vertical: true, style_class: 'poketokenbar-content', x_expand: true,
+        const content = verticalBox({
+            style_class: 'poketokenbar-content', x_expand: true,
         });
         content.set_width(POPUP_WIDTH);
 
@@ -75,7 +75,7 @@ class Indicator extends PanelMenu.Button {
             vscrollbar_policy: St.PolicyType.AUTOMATIC,
             y_expand: true,
         });
-        this._bodyBox = new St.BoxLayout({vertical: true, x_expand: true});
+        this._bodyBox = verticalBox({x_expand: true});
         this._body.set_child(this._bodyBox);
         content.add_child(this._body);
 

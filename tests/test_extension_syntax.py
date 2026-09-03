@@ -89,8 +89,11 @@ def test_everything_enable_starts_is_torn_down_in_disable():
         assert f"disconnect(this.{handler})" in disable, f"{handler} is never disconnected"
     if "new StateReader" in enable:
         assert "stop()" in disable, "the state reader's timer is never stopped"
-    for actor in ("_indicator", "_pet"):
-        assert f"this.{actor}?.destroy()" in disable, f"{actor} is never destroyed"
+    assert "this._indicator?.destroy()" in disable, "_indicator is never destroyed"
+    # The pet is in chrome, so it has to be removed from the layout manager as
+    # well as destroyed; _removePet does both and disable() must call it.
+    assert "_removePet()" in disable, "_pet is never torn down"
+    assert "removeChrome" in source, "the pet is never taken out of chrome"
 
 
 def test_the_stylesheet_is_present():

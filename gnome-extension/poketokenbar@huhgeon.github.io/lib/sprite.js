@@ -24,17 +24,22 @@ const MINIMUM_FRAME_MS = 20;
 // beyond that is not one of ours and is not worth the memory.
 const MAX_FRAMES = 240;
 
-/** One decoded frame: content ready to assign, and how long to hold it. */
-function contentFromPixbuf(pixbuf) {
-    const content = St.ImageContent.new_with_preferred_size(
-        pixbuf.get_width(), pixbuf.get_height());
+/** Content ready to assign, with the pixel size that goes with it.
+ *
+ * Matches the pattern GNOME Shell's own screenshot UI uses: an ImageContent
+ * sized to the pixbuf, then the raw bytes with their format and rowstride.
+ */
+function frameFromPixbuf(pixbuf, delay) {
+    const width = pixbuf.get_width();
+    const height = pixbuf.get_height();
+    const content = St.ImageContent.new_with_preferred_size(width, height);
     content.set_bytes(
         pixbuf.read_pixel_bytes(),
         pixbuf.get_has_alpha() ? Cogl.PixelFormat.RGBA_8888 : Cogl.PixelFormat.RGB_888,
-        pixbuf.get_width(),
-        pixbuf.get_height(),
+        width,
+        height,
         pixbuf.get_rowstride());
-    return content;
+    return {content, delay, width, height};
 }
 
 /**
@@ -56,7 +61,7 @@ export function decodeFrames(path) {
 
     if (animation.is_static_image()) {
         try {
-            return [{content: contentFromPixbuf(animation.get_static_image()), delay: 0}];
+            return [frameFromPixbuf(animation.get_static_image(), 0)];
         } catch (_e) {
             return [];
         }
@@ -76,14 +81,14 @@ export function decodeFrames(path) {
 
     let elapsedMs = 0;
     for (let i = 0; i < MAX_FRAMES; i++) {
-        let content;
+        const delay = Math.max(MINIMUM_FRAME_MS, iter.get_delay_time());
+        let frame;
         try {
-            content = contentFromPixbuf(iter.get_pixbuf());
+            frame = frameFromPixbuf(iter.get_pixbuf(), delay);
         } catch (_e) {
             break;
         }
-        const delay = Math.max(MINIMUM_FRAME_MS, iter.get_delay_time());
-        frames.push({content, delay});
+        frames.push(frame);
         elapsedMs += delay;
         // advance() returns false when the frame did not change, which for a
         // loop means we are back where we started.
@@ -177,7 +182,15 @@ class Sprite extends St.Widget {
         if (!frame)
             return;
         this.content = frame.content;
-        const [width, height] = frame.content.get_preferred_size();
+        // The natural size is carried on the frame, not asked of the content.
+        // Clutter.Content.get_preferred_size returns a boolean with width and
+        // height as out-parameters, so in GJS it is [ok, width, height] —
+        // destructuring two names off it silently binds the boolean to width.
+        const {width, height} = frame;
+        if (!width || !height) {
+            this.set_size(this._size, this._size);
+            return;
+        }
         // contentMode "fit": the long edge touches the box, the aspect holds.
         const scale = Math.min(this._size / width, this._size / height);
         this.set_size(Math.max(1, Math.round(width * scale)),

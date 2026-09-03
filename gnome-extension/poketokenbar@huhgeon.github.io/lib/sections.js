@@ -11,22 +11,26 @@ import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
-import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-
 import * as Commands from './commands.js';
 import * as Config from './config.js';
 import {LANGUAGES} from './languages.js';
 import {Sprite} from './sprite.js';
 import {
     Meter, ago, badge, button, column, heading, label, levelClass, placeholder,
-    resetsIn, row, statLine,
+    resetsIn, row, statLine, toggleRow,
 } from './widgets.js';
 
 /** Base: a vertical box that empties itself before each update. */
 const Section = GObject.registerClass(
 class Section extends St.BoxLayout {
     _init(styleClass = 'poketokenbar-section') {
-        super._init({vertical: true, style_class: styleClass, x_expand: true});
+        super._init({style_class: styleClass, x_expand: true});
+        // Same reason as widgets.verticalBox: `vertical` is deprecated from 48
+        // and `orientation` is not documented as present in 45.
+        if ('orientation' in this)
+            this.orientation = Clutter.Orientation.VERTICAL;
+        else
+            this.vertical = true;
     }
 
     clear() {
@@ -498,10 +502,10 @@ class SettingsSection extends Section {
     }
 
     _addToggle(key, stringKey, config) {
-        const toggle = new PopupMenu.PopupSwitchMenuItem(
-            this._reader.text(stringKey), Boolean(config[key]));
-        toggle.connect('toggled', (_item, value) => Config.set(key, value));
-        this.add_child(toggle);
+        this.add_child(toggleRow(
+            this._reader.text(stringKey),
+            Boolean(config[key]),
+            value => Config.set(key, value)));
     }
 
     _addLanguage(config) {
