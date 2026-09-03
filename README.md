@@ -90,14 +90,18 @@ SQLite 저장소 — 만 위치가 실제로 다르고, 그 리눅스 경로는 
 ## 구조
 
 ```
-poketokend (Python)  ──→  ~/.local/state/poketokenbar/state.json  ──→  GNOME Shell 확장
-                     ←──  $XDG_RUNTIME_DIR/poketokenbar/commands/  ←──
+                         ┌──→  state.json      ──→  GNOME Shell 확장
+poketokend (Python)  ────┤                          Windows 트레이 앱 (Qt)
+                         └←──  커맨드 스풀 디렉터리 ←──  Plasma 위젯
 ```
 
-D-Bus가 아니라 그냥 파일입니다. 데몬은 UI를 전혀 모릅니다 — 애초에 두 번째 프론트엔드가 가능했던
-이유이고, 세 번째도 쉬운 이유입니다.
+D-Bus가 아니라 그냥 파일입니다. 데몬은 UI를 전혀 모릅니다 — 애초에 두 번째 프론트엔드가
+가능했던 이유이고, 세 번째가 쉬웠던 이유입니다. 실제 경로는 플랫폼을 따릅니다
+(리눅스는 XDG, Windows는 `%APPDATA%`, macOS는 Application Support).
 
 ## 설치
+
+### Linux (GNOME)
 
 준비물: GNOME Shell 45+, Python 3.12+, 알림용 `libnotify`(선택), 파싱 가속용
 `python-orjson`(선택).
@@ -109,9 +113,19 @@ cd poketokenbar-gnome
 systemctl --user enable --now poketokend
 ```
 
-그다음 확장 앱에서 **PokeTokenBar**를 켜면 됩니다.
+그다음 확장을 켭니다.
+
+```bash
+gnome-extensions enable poketokenbar@huhgeon.github.io
+```
+
+**셸을 다시 띄워야 목록에 나타납니다.** Xorg는 `Alt`+`F2` → `r`, Wayland는 로그아웃 후
+다시 로그인. 확장을 켜는 것 자체가 실행이고, 별도로 띄우는 프로그램은 없습니다 — 다만
+숫자를 만드는 건 데몬이라 `poketokend`가 돌고 있어야 합니다.
 
 ### Windows
+
+준비물: Windows 10+, Python 3.12+.
 
 ```powershell
 git clone https://github.com/HUHGEON/poketokenbar-gnome.git
@@ -119,9 +133,9 @@ cd poketokenbar-gnome
 powershell -ExecutionPolicy Bypass -File packaging\windows\install.ps1
 ```
 
-패널이 없으니 알림 영역(트레이)에 포켓몬이 삽니다. 클릭하면 같은 탭들이 열리고,
-데몬과 트레이 앱 둘 다 로그인 시 자동 시작합니다. 전부 사용자 프로필 안에만 설치되고
-관리자 권한이 필요 없습니다.
+패널이 없으니 알림 영역(트레이)에 포켓몬이 삽니다. 클릭하면 같은 탭들이 열리고, 데몬과
+트레이 앱 둘 다 로그인 시 자동 시작합니다. 전부 사용자 프로필 안에만 설치되고 관리자
+권한이 필요 없습니다.
 
 | | 위치 |
 |---|---|
@@ -130,12 +144,6 @@ powershell -ExecutionPolicy Bypass -File packaging\windows\install.ps1
 | 프로그램 | `%LOCALAPPDATA%\PokeTokenBar\` |
 
 제거는 `packaging\windows\uninstall.ps1` — 세이브는 일부러 남겨둡니다.
-
-```bash
-gnome-extensions enable poketokenbar@huhgeon.github.io
-```
-
-Xorg에서는 `Alt`+`F2` → `r`로 셸을 다시 불러오고, Wayland에서는 로그아웃 후 다시 로그인하세요.
 
 ## Plasma 포트와 달라진 점
 
