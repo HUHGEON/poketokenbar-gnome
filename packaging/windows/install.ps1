@@ -28,19 +28,33 @@ $py = Join-Path $venv 'Scripts\python.exe'
 # pythonw, not python: the console host would otherwise flash a black window
 # every time either process starts.
 $pyw = Join-Path $venv 'Scripts\pythonw.exe'
+
+# A .vbs shim rather than a .bat: Windows shows a console window for a batch
+# file even when what it starts has no console of its own.
+#
+# Built from a single-quoted here-string and Replace, never by interpolation.
+# VBScript escapes a quote inside a string by doubling it, so the Run line needs
+# `"""..."" -m ..."` — three quotes, then two. Interpolating the path into that
+# is how the first version shipped one quote short and every launch died with
+# "Expected end of statement".
+$vbsTemplate = @'
+Set shell = CreateObject("WScript.Shell")
+shell.Environment("Process")("PYTHONPATH") = "__APP__"
+shell.Run """__PYW__"" -m __MODULE__", 0, False
+'@
+
 $launchers = @{
-  'poketokend.vbs' = "$pyw`" -m poketokenbar.daemon"
-  'poketokenbar.vbs' = "$pyw`" -m poketokenbar.ui.app"
+  'poketokend.vbs'   = 'poketokenbar.daemon'
+  'poketokenbar.vbs' = 'poketokenbar.ui.app'
 }
+
 foreach ($name in $launchers.Keys) {
   $target = Join-Path $root $name
-  # A .vbs shim rather than a .bat: Windows shows a console window for a batch
-  # file even when what it starts has no console of its own.
-  @"
-Set shell = CreateObject("WScript.Shell")
-shell.Environment("Process")("PYTHONPATH") = "$app"
-shell.Run """$($launchers[$name])", 0, False
-"@ | Set-Content -Encoding ASCII $target
+  $vbsTemplate.
+    Replace('__APP__', $app).
+    Replace('__PYW__', $pyw).
+    Replace('__MODULE__', $launchers[$name]) |
+    Set-Content -Encoding ASCII $target
   Write-Host "    wrote $target"
 }
 

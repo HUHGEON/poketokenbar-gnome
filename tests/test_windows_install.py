@@ -134,3 +134,52 @@ def test_config_and_state_share_a_root_on_windows():
         == platform_paths.state_base(home, env, "win32")
     )
     assert config.DEFAULTS  # the module the tray writes through
+
+
+# MARK: the generated VBScript
+
+
+def test_the_launcher_is_built_by_substitution_not_interpolation():
+    """The first release shipped a .vbs one quote short.
+
+    VBScript escapes a quote inside a string by doubling it, so the Run line
+    needs three quotes then two. Interpolating a path into that is how one got
+    lost, and the result parses fine as PowerShell while every launch dies with
+    "Expected end of statement" — which no amount of parsing the installer
+    would have caught.
+    """
+    script = INSTALL.read_text(encoding="utf-8")
+    assert "@'" in script, "the template must be a single-quoted here-string"
+    assert '"""__PYW__"" -m __MODULE__"' in script, (
+        "the Run line no longer has the doubled quotes VBScript needs"
+    )
+    # The call is split across lines for readability, so the dot is not adjacent.
+    assert "Replace('__PYW__'" in script
+
+
+def test_the_template_has_balanced_vbscript_quoting():
+    """Counted rather than eyeballed: every line of the template must have an
+    even number of quotes, or the string never closes."""
+    script = INSTALL.read_text(encoding="utf-8")
+    template = script.split("$vbsTemplate = @'")[1].split("'@")[0]
+    for line in template.strip().splitlines():
+        assert line.count('"') % 2 == 0, f"unbalanced quotes: {line}"
+
+
+def test_the_launcher_starts_both_halves():
+    script = INSTALL.read_text(encoding="utf-8")
+    assert "'poketokenbar.daemon'" in script
+    assert "'poketokenbar.ui.app'" in script
+
+
+def test_ci_actually_runs_the_installer():
+    """Parsing it is not running it, and the quoting bug lived entirely in the
+    gap between the two."""
+    workflow = (
+        Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci.yml"
+    ).read_text(encoding="utf-8")
+    assert "./packaging/windows/install.ps1" in workflow, (
+        "CI parses the installer but never executes it"
+    )
+    assert "cscript" in workflow, "the generated VBScript is never compiled"
+    assert "./packaging/windows/uninstall.ps1" in workflow
