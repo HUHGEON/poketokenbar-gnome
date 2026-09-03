@@ -13,6 +13,7 @@ mattered. `build()` is now the only way anything gets a provider.
 
 from __future__ import annotations
 
+from .antigravity import AntigravityProvider
 from .base import ScanningProvider, UsageProvider
 from .claude import ClaudeProvider
 from .codex import CodexProvider
@@ -37,6 +38,7 @@ REGISTRY: list[type] = [
     CopilotProvider,
     CursorProvider,
     KiroProvider,
+    AntigravityProvider,
 ]
 
 
@@ -67,4 +69,5 @@ __all__ = [
     "CopilotProvider",
     "CursorProvider",
     "KiroProvider",
+    "AntigravityProvider",
 ]
