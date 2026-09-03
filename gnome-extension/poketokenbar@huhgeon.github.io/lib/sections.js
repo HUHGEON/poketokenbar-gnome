@@ -16,8 +16,8 @@ import * as Config from './config.js';
 import {LANGUAGES} from './languages.js';
 import {Sprite} from './sprite.js';
 import {
-    Meter, badge, button, column, heading, label, levelClass, placeholder,
-    resetsIn, row, statLine, toggleRow,
+    Meter, badge, button, column, heading, label, levelClass, paragraph,
+    placeholder, resetsIn, row, statLine, toggleRow,
 } from './widgets.js';
 
 /** Base: a vertical box that empties itself before each update. */
@@ -107,7 +107,7 @@ class HomeSection extends Section {
         if (banner?.kind) {
             this.add_child(label(banner.title ?? '', 'poketokenbar-celebration'));
             if (banner.detail)
-                this.add_child(label(banner.detail, 'poketokenbar-subtle'));
+                this.add_child(paragraph(banner.detail, 'poketokenbar-subtle'));
         }
 
         // --- companion -----------------------------------------------------
@@ -314,15 +314,19 @@ class ShopSection extends Section {
 
         for (const shopItem of state?.shop ?? []) {
             const icon = itemIcon(shopItem.sprite_path, shopItem.emoji);
+            // The text column takes whatever width the icon, price and button
+            // leave, and the description wraps inside it. With a spacer soaking
+            // up the free space instead, the column got its natural width and
+            // every description ran off the edge of a 380px popup.
             const left = column([
                 label(shopItem.label || shopItem.key, 'poketokenbar-key'),
-                label(shopItem.description ?? '', 'poketokenbar-subtle'),
+                paragraph(shopItem.description ?? '', 'poketokenbar-subtle'),
             ]);
-            const spacer = new St.Widget({x_expand: true});
+            left.x_expand = true;
             const price = label(shopItem.price_text ?? '', 'poketokenbar-value');
-            const children = [icon, left, spacer];
+            const children = [icon, left];
             if (shopItem.owned_count > 0)
-                children.push(badge(`${t('owned')} x${shopItem.owned_count}`));
+                children.push(badge(t('owned_count').replace('%1', String(shopItem.owned_count))));
             children.push(price);
             if (shopItem.owned) {
                 // A one-off that is already held: showing a live Buy button
@@ -361,10 +365,11 @@ class BagSection extends Section {
             const left = column([
                 label(`${bagItem.label || bagItem.key} ×${bagItem.count ?? 0}`,
                     'poketokenbar-key'),
-                label(bagItem.effect || bagItem.description || '', 'poketokenbar-subtle'),
+                paragraph(bagItem.effect || bagItem.description || '',
+                    'poketokenbar-subtle'),
             ]);
-            const spacer = new St.Widget({x_expand: true});
-            const children = [icon, left, spacer];
+            left.x_expand = true;
+            const children = [icon, left];
             if (bagItem.usable)
                 children.push(button(t('use'), () => Commands.use(bagItem.key)));
             else if (bagItem.passive)
@@ -559,18 +564,48 @@ const TOGGLES = [
 // has a range outside which the daemon misbehaves quietly — a two-second
 // refresh hammers the disk, a 0px pet is invisible — and a stepper cannot
 // express a value outside it.
+//
+// The unit rides on the value rather than the label ("120s", not "Refresh
+// every (s)"): a unit in the label has to be translated seven times to say
+// what the symbol already says everywhere.
 const STEPPERS = [
-    {key: 'refresh_interval', label: 'Refresh every (s)', min: 60, max: 900, step: 60},
-    {key: 'warn_threshold', label: 'Warn at (%)', min: 50, max: 95, step: 5},
-    {key: 'crit_threshold', label: 'Critical at (%)', min: 60, max: 99, step: 1},
-    {key: 'floating_pet_size', label: 'Pet size (px)', min: 48, max: 192, step: 12},
+    {key: 'refresh_interval', string: 'setting_refresh_interval', unit: 's',
+        min: 60, max: 900, step: 60},
+    {key: 'warn_threshold', string: 'setting_warn_threshold', unit: '%',
+        min: 50, max: 95, step: 5},
+    {key: 'crit_threshold', string: 'setting_crit_threshold', unit: '%',
+        min: 60, max: 99, step: 1},
+    {key: 'floating_pet_size', string: 'setting_pet_size', unit: 'px',
+        min: 48, max: 192, step: 12},
 ];
 
-// Which limit windows the panel shows.
-const LIMIT_MODES = ['both', 'session', 'weekly'];
-
-// Frame-rate presets. The values live in framecap.js next to the algorithm.
-const QUALITIES = ['saver', 'balanced', 'smooth'];
+// Settings chosen from a short row of buttons. Both the setting and each of its
+// values carry a catalogue key: the values used to render as the raw strings
+// the daemon stores, so the settings tab offered "both / session / weekly" and
+// "saver / balanced / smooth" in English under a heading that read
+// "limit_display_mode".
+const CHOICES = [
+    {
+        key: 'limit_display_mode',
+        string: 'setting_limit_display',
+        options: [
+            {value: 'both', string: 'limits_both'},
+            {value: 'session', string: 'five_hour_session'},
+            {value: 'weekly', string: 'weekly'},
+        ],
+    },
+    // Frame-rate presets. The values live in framecap.js next to the algorithm;
+    // these are only their names.
+    {
+        key: 'animation_quality',
+        string: 'setting_animation',
+        options: [
+            {value: 'saver', string: 'quality_saver'},
+            {value: 'balanced', string: 'quality_balanced'},
+            {value: 'smooth', string: 'quality_smooth'},
+        ],
+    },
+];
 
 export const SettingsSection = GObject.registerClass(
 class SettingsSection extends Section {
@@ -587,15 +622,18 @@ class SettingsSection extends Section {
         this._state = state;
         this.clear();
         const config = state?.config ?? {};
+        const t = key => this._reader.text(key);
 
-        this.add_child(heading(this._reader.text('refresh')));
+        // "Settings", not "Refresh": the heading was borrowed from the nearest
+        // catalogue entry and named one row of the tab it sits above.
+        this.add_child(heading(t('settings')));
         for (const toggle of TOGGLES)
             this._addToggle(toggle.key, toggle.string, config);
         for (const stepper of STEPPERS)
             this._addStepper(stepper, config);
 
-        this._addChoice('limit_display_mode', LIMIT_MODES, config);
-        this._addChoice('animation_quality', QUALITIES, config);
+        for (const choice of CHOICES)
+            this._addChoice(choice, config);
         this._addLanguage(config);
         this._addScanFolders(state);
     }
@@ -604,38 +642,43 @@ class SettingsSection extends Section {
         this.add_child(toggleRow(
             this._reader.text(stringKey),
             Boolean(config[key]),
-            value => Config.set(key, value)));
+            value => Config.set(key, value),
+            word => this._reader.text(word)));
     }
 
     _addStepper(spec, config) {
         const current = Number(config[spec.key]) || spec.min;
         const clamp = value => Math.max(spec.min, Math.min(spec.max, value));
-        const value = label(String(current), 'poketokenbar-value');
-        const spacer = new St.Widget({x_expand: true});
+        const name = paragraph(this._reader.text(spec.string), 'poketokenbar-key');
         this.add_child(row([
-            label(spec.label, 'poketokenbar-key'),
-            spacer,
+            name,
             button('−', () => Config.set(spec.key, clamp(current - spec.step))),
-            value,
+            label(`${current}${spec.unit ?? ''}`, 'poketokenbar-value'),
             button('+', () => Config.set(spec.key, clamp(current + spec.step))),
         ]));
     }
 
-    _addChoice(key, options, config) {
-        const current = config[key];
-        const buttons = options.map(option => {
-            const widget = button(option, () => Config.set(key, option));
+    _addChoice(spec, config) {
+        const current = config[spec.key];
+        const buttons = spec.options.map(option => {
+            const widget = button(
+                this._reader.text(option.string),
+                () => Config.set(spec.key, option.value));
             // The chosen one stays flat rather than disabled: a disabled button
             // reads as unavailable, not as selected.
-            widget.opacity = option === current ? 255 : 130;
+            widget.opacity = option.value === current ? 255 : 130;
             return widget;
         });
-        this.add_child(row([label(key, 'poketokenbar-key')]));
+        this.add_child(row([label(this._reader.text(spec.string), 'poketokenbar-key')]));
         this.add_child(row(buttons));
     }
 
     _addLanguage(config) {
         const current = config.language ?? 'en';
+        // Labelled, like every other setting. Seven bare language codes with
+        // nothing above them read as debug output.
+        this.add_child(row([label(this._reader.text('setting_language'),
+            'poketokenbar-key')]));
         const buttons = LANGUAGES.map(code => {
             const widget = button(code, () => Config.set('language', code));
             // The chosen one stays flat rather than being disabled: a disabled
@@ -650,7 +693,10 @@ class SettingsSection extends Section {
         const providers = state?.settings?.providers ?? [];
         if (providers.length === 0)
             return;
-        this.add_child(heading(this._reader.text('collection')));
+        // "Scan folders", not "Collection" — that one names the Pokedex tab.
+        this.add_child(heading(this._reader.text('scan_folders')));
+        this.add_child(paragraph(this._reader.text('setting_scan_roots_hint'),
+            'poketokenbar-subtle'));
 
         for (const providerRow of providers) {
             const summary = providerRow.custom_scan_roots
@@ -682,7 +728,9 @@ class SettingsSection extends Section {
             // The count comes from the daemon and reports folders that
             // survived, not patterns typed: an extra that swallows a curated
             // default is dropped, and saying otherwise would be a lie.
-            label(`${providerRow.matched_folders}`, 'poketokenbar-subtle'),
+            label(this._reader.text('setting_scan_roots_matches')
+                .replace('%1', String(providerRow.matched_folders)),
+            'poketokenbar-subtle'),
         ]);
     }
 });

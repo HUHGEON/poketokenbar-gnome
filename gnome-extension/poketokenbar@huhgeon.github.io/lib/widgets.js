@@ -6,6 +6,7 @@
 
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
+import Pango from 'gi://Pango';
 import St from 'gi://St';
 
 /** Utilisation bands, matching limits.level() in the daemon. */
@@ -40,6 +41,30 @@ export function label(text, styleClass = '') {
         style_class: styleClass,
         y_align: Clutter.ActorAlign.CENTER,
     });
+}
+
+/**
+ * A label for a sentence rather than a value: it wraps instead of running off.
+ *
+ * St.Label lays a line out at its natural width and the popup is a fixed 380px,
+ * so every shop description was cut off mid-sentence — "Send off your current
+ * Pokemon for an egg guarant…" is not a description of anything. Wrapping needs
+ * three things together: the wrap flag, a wrap mode, and ellipsize turned off,
+ * because the default ellipsize wins over line_wrap and re-truncates the text.
+ * The actor also has to be allowed to expand, or it wraps at its natural width
+ * and every word ends up on its own line.
+ */
+export function paragraph(text, styleClass = '') {
+    const widget = new St.Label({
+        text: text ?? '',
+        style_class: styleClass,
+        x_expand: true,
+        y_align: Clutter.ActorAlign.CENTER,
+    });
+    widget.clutter_text.line_wrap = true;
+    widget.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+    widget.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+    return widget;
 }
 
 export function row(children, styleClass = 'poketokenbar-row') {
@@ -124,17 +149,20 @@ export function placeholder(text) {
  * PopupMenu via addMenuItem. Adding one to an St container does not lay out —
  * the whole settings tab would have rendered as nothing.
  */
-export function toggleRow(text, value, onToggle) {
+export function toggleRow(text, value, onToggle, words = null) {
     const control = new St.Button({
-        label: value ? 'on' : 'off',
+        // `words` is the catalogue; without one the switch keeps saying "on"
+        // and "off" in English next to a translated label.
+        label: words ? words(value ? 'on' : 'off') : (value ? 'on' : 'off'),
         style_class: value ? 'poketokenbar-toggle-on' : 'poketokenbar-toggle-off',
         can_focus: true,
         reactive: true,
         track_hover: true,
     });
     control.connect('clicked', () => onToggle(!value));
-    const spacer = new St.Widget({x_expand: true});
-    return row([label(text, 'poketokenbar-key'), spacer, control]);
+    // The label wraps: several settings need a sentence, and a fixed-width
+    // popup cuts a one-line label off rather than making the popup wider.
+    return row([paragraph(text, 'poketokenbar-key'), control]);
 }
 
 /**
@@ -192,13 +220,19 @@ export function resetsIn(iso, strings) {
     return `${minutes}m`;
 }
 
-/** "just now" / "3 min ago" for the footer's freshness line. */
-export function ago(seconds) {
+/** "just now" / "3 min ago" for the footer's freshness line.
+ *
+ * `strings` is the catalogue, as in `resetsIn`: the footer is the one line that
+ * is on screen every second the popup is open, and it was the last one still
+ * in English.
+ */
+export function ago(seconds, strings) {
     if (seconds === null || seconds === undefined)
         return '';
+    const t = strings ?? (key => key);
     if (seconds < 90)
-        return 'just now';
-    return `${Math.round(seconds / 60)} min ago`;
+        return t('just_now');
+    return t('minutes_ago').replace('%1', String(Math.round(seconds / 60)));
 }
 
 /** A small pill, for badges like RAISING or a provider incident. */

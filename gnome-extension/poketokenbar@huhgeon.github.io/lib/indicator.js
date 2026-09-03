@@ -86,8 +86,10 @@ class Indicator extends PanelMenu.Button {
             // The daemon has handled these all along; without a control they
             // were reachable only from poketokenctl, which is not where anyone
             // would look for "move my Pokedex to another machine".
-            button('Export', () => Commands.exportSave(this._savePath())),
-            button('Import', () => Commands.importSave(this._savePath())),
+            button(this._reader.text('export_save'),
+                () => Commands.exportSave(this._savePath())),
+            button(this._reader.text('import_save'),
+                () => Commands.importSave(this._savePath())),
         ], 'poketokenbar-actions'));
 
         item.add_child(content);
@@ -232,11 +234,13 @@ class Indicator extends PanelMenu.Button {
         // Freshness, so a working daemon looks different from a stopped one
         // before the ten-minute staleness threshold is anywhere near.
         if (state?.scanning) {
-            this._footer.text = 'scanning…';
+            this._footer.text = this._reader.text('scanning');
             return;
         }
         const age = this._reader.ageSeconds();
-        this._footer.text = age === null ? '' : `Updated ${ago(age)}`;
+        this._footer.text = age === null
+            ? ''
+            : `${this._reader.text('updated')} ${ago(age, key => this._reader.text(key))}`;
     }
 
     /** Pause every sprite in the extension — used while the session is locked. */
