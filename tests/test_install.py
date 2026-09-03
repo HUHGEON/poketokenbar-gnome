@@ -61,12 +61,38 @@ def test_the_extension_tree_is_copied_by_its_uuid():
     assert '"$here/gnome-extension/$extension_uuid"' in script()
 
 
-def test_both_desktops_are_handled():
-    """The repo still carries the Plasma widgets it was forked from, so the
-    script picks by desktop rather than assuming GNOME."""
+def test_every_desktop_is_handled():
+    """The repo carries three front ends, so the script picks rather than
+    assuming GNOME."""
     text = script()
-    assert "install_gnome" in text and "install_plasma" in text
+    for name in ("install_gnome", "install_plasma", "install_qt"):
+        assert name in text, f"{name} is not offered"
     assert "XDG_CURRENT_DESKTOP" in text
+
+
+def test_an_unknown_desktop_gets_something_that_works():
+    """XFCE, Cinnamon and the tiling compositors have no panel to extend and no
+    plasmoid to load. Installing the Shell extension there leaves someone with
+    nothing at all, which is what this used to do."""
+    text = script()
+    fallback = text.split("*KDE*")[1].split("esac")[0]
+    assert "install_qt" in fallback
+    assert "install_gnome" not in fallback
+
+
+def test_the_tray_launcher_and_autostart_are_written():
+    text = script()
+    assert "poketokenbar.ui.app" in text, "the tray application is never started"
+    assert "autostart" in text, "it would not come back after a reboot"
+
+
+def test_a_missing_pyside_does_not_fail_the_install():
+    """The daemon is the part that counts tokens; a front end that cannot be
+    installed must not take it down with it."""
+    text = script()
+    qt = text.split("install_qt() {")[1].split("\n}")[0]
+    assert "return 0" in qt
+    assert "The daemon still works" in qt
 
 
 def test_nothing_is_written_outside_home():

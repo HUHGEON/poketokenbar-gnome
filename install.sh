@@ -10,8 +10,11 @@ app="$HOME/.local/share/poketokenbar/app"
 venv="$HOME/.local/share/poketokenbar/venv"
 extension_uuid="poketokenbar@huhgeon.github.io"
 
-# Which front ends to install. Default is "auto": whichever desktop is running,
-# falling back to both when that cannot be told (a plain SSH session, say).
+# Which front end to install. Default is "auto": whichever desktop is running.
+#   gnome   the Shell extension
+#   plasma  the Plasma widgets
+#   qt      the tray application, which needs no particular desktop
+#   none    daemon only
 ui="${POKETOKENBAR_UI:-auto}"
 # Set to skip the systemd bits, which is what the container test does.
 no_service="${POKETOKENBAR_NO_SERVICE:-}"
@@ -74,9 +77,38 @@ install_plasma() {
   done
 }
 
+install_qt() {
+  # The same tray application Windows uses. It is plain Qt and needs no
+  # particular desktop, which is the only option someone on XFCE, Cinnamon or a
+  # tiling compositor has — there is no panel to extend and no plasmoid to load.
+  echo "==> installing the Qt tray application"
+  if ! "$venv/bin/pip" install -q PySide6-Essentials; then
+    echo "    !! PySide6 could not be installed; the tray application needs it." >&2
+    echo "       The daemon still works, and poketokenctl can drive it." >&2
+    return 0
+  fi
+  cat > "$HOME/.local/bin/poketokenbar" <<EOF
+#!/usr/bin/env bash
+PYTHONPATH="$app" exec "$venv/bin/python" -m poketokenbar.ui.app "\$@"
+EOF
+  chmod +x "$HOME/.local/bin/poketokenbar"
+
+  mkdir -p "$HOME/.config/autostart"
+  cat > "$HOME/.config/autostart/poketokenbar.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=PokeTokenBar
+Exec=$HOME/.local/bin/poketokenbar
+Terminal=false
+X-GNOME-Autostart-enabled=true
+EOF
+  echo "    run it now with: poketokenbar"
+}
+
 case "$ui" in
   gnome) install_gnome ;;
   plasma) install_plasma ;;
+  qt) install_qt ;;
   none) echo "==> skipping the desktop front end" ;;
   auto)
     desktop="${XDG_CURRENT_DESKTOP:-}"
@@ -84,14 +116,17 @@ case "$ui" in
       *GNOME*) install_gnome ;;
       *KDE*) install_plasma ;;
       *)
-        echo "==> no desktop detected in XDG_CURRENT_DESKTOP; installing both"
-        install_gnome
-        install_plasma
+        # Anything else — XFCE, Cinnamon, a tiling compositor, or a session with
+        # no desktop set at all. There is no panel to extend and no plasmoid to
+        # load, so the tray application is the one that will actually work.
+        echo "==> XDG_CURRENT_DESKTOP is '${desktop:-unset}'; installing the tray application"
+        echo "    (force another with POKETOKENBAR_UI=gnome or =plasma)"
+        install_qt
         ;;
     esac
     ;;
   *)
-    echo "unknown POKETOKENBAR_UI=$ui (expected gnome, plasma, both or none)" >&2
+    echo "unknown POKETOKENBAR_UI=$ui (expected gnome, plasma, qt or none)" >&2
     exit 2
     ;;
 esac

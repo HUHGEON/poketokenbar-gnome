@@ -102,6 +102,13 @@ CI found this: the Cursor tests passed locally and failed on a runner, because a
 provider given an explicit `home=` still reads the ambient XDG base. The suite
 had been quietly reporting on whoever's machine it ran on.
 
+**Front-end parity.** The two front ends are audited against each other — which
+state.json blocks each reads, which commands each sends, which settings each
+exposes. That found the Qt one offering three settings for a desktop pet it did
+not have, which is worse than a missing feature: the switch flipped and nothing
+happened. They are level now, and both agree with the daemon on what the three
+animation presets mean.
+
 ## Not verified
 
 **Rendering.** Nothing here proves an actor appears, that a GNOME API exists, or

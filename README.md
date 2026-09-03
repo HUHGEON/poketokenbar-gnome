@@ -33,7 +33,7 @@
 |---|---|
 | 사용량 데몬 (프로바이더 12개) | ✅ 완료 |
 | GNOME Shell 확장 | ✅ 작성 완료 |
-| Windows 트레이 앱 (Qt) | ✅ 작성 완료 |
+| Qt 트레이 앱 (Windows·그 외 리눅스) | ✅ 작성 완료 |
 | 테스트 | ✅ Python 725개 + JavaScript 13개, CI 초록 |
 | 클린 체크아웃에서 설치 검증 | ✅ CI에서 |
 | **실제 Windows에서 데몬 동작 검증** | ✅ **CI의 windows-latest 러너에서** |
@@ -91,7 +91,7 @@ SQLite 저장소 — 만 위치가 실제로 다르고, 그 리눅스 경로는 
 
 ```
                          ┌──→  state.json      ──→  GNOME Shell 확장
-poketokend (Python)  ────┤                          Windows 트레이 앱 (Qt)
+poketokend (Python)  ────┤                          Qt 트레이 앱 (Windows·기타 리눅스)
                          └←──  커맨드 스풀 디렉터리 ←──  Plasma 위젯
 ```
 
@@ -122,6 +122,16 @@ gnome-extensions enable poketokenbar@huhgeon.github.io
 **셸을 다시 띄워야 목록에 나타납니다.** Xorg는 `Alt`+`F2` → `r`, Wayland는 로그아웃 후
 다시 로그인. 확장을 켜는 것 자체가 실행이고, 별도로 띄우는 프로그램은 없습니다 — 다만
 숫자를 만드는 건 데몬이라 `poketokend`가 돌고 있어야 합니다.
+
+### Linux (그 외 데스크탑)
+
+XFCE·Cinnamon·타일링 컴포지터 등 확장할 패널도 plasmoid도 없는 환경에서는, Windows와
+같은 Qt 트레이 앱이 유일하게 동작하는 선택지입니다. `install.sh`가 데스크탑을 못 알아보면
+자동으로 이것을 깝니다.
+
+```bash
+POKETOKENBAR_UI=qt ./install.sh
+```
 
 ### Windows
 
