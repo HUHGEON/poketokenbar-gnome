@@ -569,3 +569,73 @@ def test_the_tray_menu_offers_save_transfer(qt_app, payload):
 def test_the_save_path_is_predictable(qt_app):
     tray = keep(TrayApp(qt_app, StateReader()))
     assert tray.save_path().name == "poketokenbar-save.json"
+
+
+# MARK: the pet coming back
+#
+# It vanished when clicked on Windows: a tool window is owned by whichever
+# window of the application was last active, so a pet that took activation
+# became owned by the popup and went with it. The flags that stop that cannot
+# be tested off Windows — macOS does not reproduce it, the unfixed version
+# survives there too — but the recovery can be, and it does not depend on
+# knowing what hid the window or why.
+
+
+def test_the_pet_refuses_activation(qt_app):
+    """The mechanism, stated as a property rather than as a behaviour: a pet
+    that never becomes the active window is never owned by the popup."""
+    from PySide6.QtCore import Qt
+
+    from poketokenbar.ui.pet import DesktopPet
+
+    pet = keep(DesktopPet())
+    assert pet.windowFlags() & Qt.WindowDoesNotAcceptFocus
+    assert pet.testAttribute(Qt.WA_ShowWithoutActivating)
+    assert pet.focusPolicy() == Qt.NoFocus
+
+
+def test_a_hidden_pet_is_back_on_the_next_poll(qt_app, payload):
+    """Whatever hid it — a compositor, a session change, the platform
+    reacting to the popup — it used to be permanent: the pet still existed, so
+    nothing showed it again and it was gone until the app restarted."""
+    subject = StateReader()
+    subject.state = payload
+    tray = keep(TrayApp(qt_app, subject))
+    state = dict(payload, config=dict(payload["config"], floating_pet_enabled=True))
+    tray._sync_pet(state)
+    assert tray.pet is not None
+
+    tray.pet.hide()
+    assert not tray.pet.isVisible()
+
+    tray._sync_pet(state)
+    assert tray.pet.isVisible(), "the pet was left hidden"
+
+
+def test_toggling_the_popup_puts_the_pet_back(qt_app, payload):
+    """The moment it went missing, so recovery cannot wait for the next poll:
+    two seconds of no pet after every click is the bug in slower form."""
+    subject = StateReader()
+    subject.state = payload
+    tray = keep(TrayApp(qt_app, subject))
+    tray._sync_pet(dict(payload, config=dict(payload["config"],
+                                             floating_pet_enabled=True)))
+    for _ in range(4):
+        tray.pet.hide()
+        tray.toggle_window()
+        assert tray.pet.isVisible(), "closing or opening the popup lost the pet"
+
+
+def test_the_reassert_does_not_ask_whether_it_is_needed(qt_app, payload):
+    """Qt cannot see a window the platform hid on its own — isVisible() still
+    reports true — so a reassert guarded by that check would do nothing in the
+    one case it exists for."""
+    import inspect
+
+    from poketokenbar.ui import app as app_module
+
+    # The docstring says why it does not check, so only the code is scanned.
+    source = inspect.getsource(app_module.TrayApp._reassert_pet)
+    body = source[source.index('"""', source.index('"""') + 3) + 3:]
+    assert "isVisible" not in body, "the reassert is guarded by a check that lies"
+    assert "show()" in body
