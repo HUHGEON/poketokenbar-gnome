@@ -24,6 +24,9 @@ import {Sprite} from './sprite.js';
 // Without this every click ends as a one-pixel drag and the popup never opens.
 const CLICK_SLOP = 4;
 
+// How far above the pet its caption sits.
+const TOOLTIP_GAP = 24;
+
 export const DesktopPet = GObject.registerClass(
 class DesktopPet extends St.Widget {
     _init(reader, {onActivate, onSavePosition} = {}) {
@@ -42,17 +45,30 @@ class DesktopPet extends St.Widget {
 
         this._tooltip = new St.Label({style_class: 'poketokenbar-pet-tooltip'});
         this._tooltip.hide();
-        Main.layoutManager.addTopChrome(this._tooltip);
+        // Chrome claims an actor's rectangle for input by default, and a label
+        // that takes input right above the pet is a rectangle the pointer keeps
+        // falling into: hover showed the tooltip, the tooltip took the pointer,
+        // the pet saw a leave, the tooltip went away — a flicker for as long as
+        // the mouse sat there. It is a caption; it has no business taking
+        // clicks.
+        Main.layoutManager.addTopChrome(this._tooltip, {affectsInputRegion: false});
 
         this._dragging = false;
         this._pressPoint = null;
+        this._grab = null;
 
         this.connect('button-press-event', (_a, event) => this._onPress(event));
         this.connect('motion-event', (_a, event) => this._onMotion(event));
         this.connect('button-release-event', (_a, event) => this._onRelease(event));
         this.connect('enter-event', () => this._showTooltip());
         this.connect('leave-event', () => this._tooltip.hide());
-        this.connect('destroy', () => this._tooltip.destroy());
+        this.connect('destroy', () => {
+            // A grab outlives the actor that took it. Dropped mid-drag — by a
+            // disable, or by the pet being switched off — it would leave the
+            // session routing every pointer event at an actor that is gone.
+            this._releaseGrab();
+            this._tooltip.destroy();
+        });
     }
 
     setSize(size) {
@@ -93,7 +109,13 @@ class DesktopPet extends St.Widget {
             return;
         this._tooltip.text = this._tooltipText;
         const [x, y] = this.get_transformed_position();
-        this._tooltip.set_position(Math.round(x), Math.round(y - 24));
+        const work = Main.layoutManager.getWorkAreaForMonitor(
+            Main.layoutManager.primaryIndex);
+        // Above the pet, unless there is no room above it — a pet parked under
+        // the top bar would otherwise caption itself off the top of the screen.
+        const above = y - TOOLTIP_GAP;
+        const top = above >= work.y ? above : y + this.get_height();
+        this._tooltip.set_position(Math.round(x), Math.round(top));
         this._tooltip.show();
     }
 
@@ -105,7 +127,33 @@ class DesktopPet extends St.Widget {
         }
         this._pressPoint = {x, y, actor: this.get_position()};
         this._dragging = false;
+        // Without a grab an actor only hears about the pointer while the
+        // pointer is over it. A 96px pet is smaller than the distance a hand
+        // moves between two frames, so a drag broke up the moment the cursor
+        // outran it — and the button release landed on whatever was underneath
+        // instead, leaving the press live. The next time the mouse so much as
+        // crossed the pet, it picked the drag straight back up.
+        this._takeGrab();
         return Clutter.EVENT_STOP;
+    }
+
+    _takeGrab() {
+        this._releaseGrab();
+        try {
+            this._grab = global.stage.grab(this);
+        } catch (error) {
+            // A refused grab costs a smooth drag, not the pet: without one the
+            // press still works, it just stops tracking at the actor's edge.
+            logError(error, 'PokeTokenBar: could not grab the pointer');
+            this._grab = null;
+        }
+    }
+
+    _releaseGrab() {
+        if (!this._grab)
+            return;
+        this._grab.dismiss();
+        this._grab = null;
     }
 
     _onMotion(event) {
@@ -123,6 +171,7 @@ class DesktopPet extends St.Widget {
     }
 
     _onRelease(_event) {
+        this._releaseGrab();
         if (!this._pressPoint)
             return Clutter.EVENT_PROPAGATE;
         const wasDragging = this._dragging;
