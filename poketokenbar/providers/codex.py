@@ -19,6 +19,7 @@ from pathlib import Path
 from .. import pricing
 from ..cache import ScanCache
 from ..models import DailyUsage, Entry, ProviderEnrichment
+from .base import ScanningProvider, dedup_keep_first
 from .claude import _parse_timestamp, jsonl_files
 
 PARSER_VERSION = 1
@@ -143,52 +144,24 @@ def session_roots(home: Path | None = None) -> list[Path]:
     return [root] if root.is_dir() else []
 
 
-class CodexProvider:
+class CodexProvider(ScanningProvider):
+    """Codex local usage."""
+
     id = "codex"
     display_name = "Codex"
     reports_cost = True
     PARSER_VERSION = PARSER_VERSION
 
-    def __init__(self, cache: ScanCache | None = None, home: Path | None = None) -> None:
-        self._cache = cache
-        self._home = home
+    def roots(self) -> list[Path]:
+        return session_roots(self._home)
 
-    def scan_entries(self) -> list[Entry]:
-        by_id: dict[str, Entry] = {}
-        for root in session_roots(self._home):
-            for path in sorted(jsonl_files(root)):
-                for entry in parse_rollout(path).entries:
-                    by_id.setdefault(entry.id, entry)
-        return list(by_id.values())
+    def parse_file(self, path: Path) -> list[Entry]:
+        return parse_rollout(path).entries
 
-    @staticmethod
-    def dedup(entries: list[Entry]) -> list[Entry]:
-        by_id: dict[str, Entry] = {}
-        for e in entries:
-            by_id.setdefault(e.id, e)
-        return list(by_id.values())
+    def dedup(self, entries: list[Entry]) -> list[Entry]:
+        # A fork or resume replays the parent's turns verbatim, so every copy
+        # carries identical numbers — first wins, not largest.
+        return dedup_keep_first(entries)
 
-    def fetch_daily(self, today: str | None = None) -> DailyUsage | None:
-        day = today or _date.today().strftime("%Y-%m-%d")
-        entries = [e for e in self.scan_entries() if e.local_day == day]
-        if not entries:
-            return None
-        daily = DailyUsage(date=day)
-        for e in entries:
-            daily.input_tokens += e.input
-            daily.output_tokens += e.output
-            daily.cache_creation_tokens += e.cache_write
-            daily.cache_read_tokens += e.cache_read
-            daily.total_cost += pricing.cost(
-                e.model, e.input, e.output, e.cache_write, e.cache_read
-            )
-        daily.total_tokens = (
-            daily.input_tokens
-            + daily.output_tokens
-            + daily.cache_creation_tokens
-            + daily.cache_read_tokens
-        )
-        return daily
-
-    def fetch_enrichment(self) -> ProviderEnrichment:
-        return ProviderEnrichment()
+    # Kept as a static entry point: the tests dedup a hand-built list.
+    dedup_entries = staticmethod(dedup_keep_first)

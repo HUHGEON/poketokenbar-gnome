@@ -226,8 +226,7 @@ class Daemon:
 
 
 def main() -> int:
-    from .providers.claude import ClaudeProvider
-    from .providers.codex import CodexProvider
+    from . import providers as provider_registry
 
     cache_base = os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache")
     cache = ScanCache(Path(cache_base) / "poketokenbar" / "scan.db")
@@ -235,7 +234,7 @@ def main() -> int:
         state_path=state.default_path(),
         config_path=config.default_path(),
         cache=cache,
-        providers=[ClaudeProvider(cache=cache), CodexProvider(cache=cache)],
+        providers=provider_registry.build(cache=cache),
         limits_source=LimitsSource(),
         companion_store=CompanionStore(
             api=PokeAPI(), sprite_store=SpriteStore()
