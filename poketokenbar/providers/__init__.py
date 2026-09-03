@@ -17,6 +17,7 @@ from .base import ScanningProvider, UsageProvider
 from .claude import ClaudeProvider
 from .codex import CodexProvider
 from .gemini import GeminiProvider
+from .grok import GrokProvider
 from .pi import OmpProvider, PiProvider
 
 REGISTRY: list[type] = [
@@ -25,6 +26,7 @@ REGISTRY: list[type] = [
     GeminiProvider,
     PiProvider,
     OmpProvider,
+    GrokProvider,
 ]
 
 
@@ -49,4 +51,5 @@ __all__ = [
     "GeminiProvider",
     "PiProvider",
     "OmpProvider",
+    "GrokProvider",
 ]

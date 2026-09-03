@@ -65,25 +65,46 @@ class UsageProvider(Protocol):
 MAX_PARSED_TOKEN_VALUE = 1_000_000_000_000_000
 
 
-def to_int(value) -> int:
-    """A token count, read the way Swift's `intOrNil` reads one.
+def number(value) -> float | None:
+    """A finite JSON number, or None. Mirrors Swift's `doubleOrNil`.
 
-    Any JSON number counts, float included — logs do carry `1e30` — while null,
-    strings, and missing keys fold to 0. Negatives become 0 (there is no such
-    thing as negative tokens) and anything at or above the ceiling clamps to it.
+    None means "no figure here" — a missing key, a JSON null, a string, or a
+    non-finite value. Callers rely on that being distinguishable from 0, which
+    is a real reading of zero.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value != value or value in (float("inf"), float("-inf")):  # NaN / ±Inf
+        return None
+    return float(value)
+
+
+def int_or_none(value) -> int | None:
+    """A token count, or None when the field carries no number.
+
+    Mirrors Swift's `intOrNil`: negatives collapse to 0 (there is no such thing
+    as negative tokens) and anything at or above the ceiling clamps to it, but a
+    missing or unparseable field stays None so callers can tell "absent" from
+    "zero". Several providers branch on exactly that difference — treating a
+    JSON null as present would subtract a cache read that was never reported.
 
     Bools are refused: `isinstance(True, int)` is True in Python, and a bool in a
     token field is a schema error, not the number 1.
     """
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    raw = number(value)
+    if raw is None:
+        return None
+    if raw <= 0:
         return 0
-    if value != value or value in (float("inf"), float("-inf")):  # NaN / ±Inf
-        return 0
-    if value <= 0:
-        return 0
-    if value >= MAX_PARSED_TOKEN_VALUE:
+    if raw >= MAX_PARSED_TOKEN_VALUE:
         return MAX_PARSED_TOKEN_VALUE
-    return int(value)
+    return int(raw)
+
+
+def to_int(value) -> int:
+    """`int_or_none` with absent folded into 0, for fields with no such branch."""
+    parsed = int_or_none(value)
+    return 0 if parsed is None else parsed
 
 
 def parse_iso(raw: str) -> datetime | None:

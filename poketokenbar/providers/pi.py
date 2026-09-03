@@ -35,6 +35,7 @@ from .base import (
     dedup_keep_max,
     loads,
     local_day,
+    number,
     parse_iso,
     to_int,
 )
@@ -44,18 +45,9 @@ from .base import (
 _BUCKETS = ("input", "output", "cacheWrite", "cacheRead")
 
 
-def _number(value) -> float | None:
-    """A finite JSON number, or None. Mirrors Swift's doubleOrNil."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    if value != value or value in (float("inf"), float("-inf")):
-        return None
-    return float(value)
-
-
 def _message_date(message: dict, envelope: dict) -> datetime | None:
     """Pi stamps messages in epoch milliseconds; envelopes in ISO-8601."""
-    millis = _number(message.get("timestamp"))
+    millis = number(message.get("timestamp"))
     if millis is not None and millis > 0:
         return datetime.fromtimestamp(millis / 1000, tz=timezone.utc)
     return _envelope_date(envelope)
@@ -75,7 +67,7 @@ def _explicit_cost(usage: dict) -> float | None:
     cost = usage.get("cost")
     if not isinstance(cost, dict):
         return None
-    total = _number(cost.get("total"))
+    total = number(cost.get("total"))
     return total if total is not None and total > 0 else None
 
 
@@ -88,7 +80,7 @@ def _entry(entry_id: str, date: datetime, usage: dict, model: str) -> Entry | No
         "model": model,
         "explicit_cost": cost,
     }
-    if any(_number(usage.get(name)) is not None for name in _BUCKETS):
+    if any(number(usage.get(name)) is not None for name in _BUCKETS):
         return Entry(
             input=to_int(usage.get("input")),
             output=to_int(usage.get("output")),
@@ -98,7 +90,7 @@ def _entry(entry_id: str, date: datetime, usage: dict, model: str) -> Entry | No
         )
     # Total-only usage has no recoverable split; keep the aggregate rather than
     # dropping a real charge.
-    if _number(usage.get("totalTokens")) is None:
+    if number(usage.get("totalTokens")) is None:
         return None
     return Entry(
         input=to_int(usage.get("totalTokens")),
