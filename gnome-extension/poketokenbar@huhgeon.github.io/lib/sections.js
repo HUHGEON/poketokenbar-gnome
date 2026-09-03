@@ -250,11 +250,15 @@ class HomeSection extends Section {
         // spent inside the current one, and it is where the forecast's rate
         // comes from.
         if (block) {
-            const resets = resetsIn(block.end_time, t);
+            // A block runs five hours from its earliest entry, so once that
+            // hour is past there is nothing to count down to — the window has
+            // gone quiet. Printing "reset" beside "resetting now" said nothing
+            // and said it permanently.
+            const left = remainingSeconds(block.end_time);
+            const resets = left !== null && left > 0 ? `${t('reset')} ${resetsIn(block.end_time, t)}` : '';
             this.add_child(statLine(
                 `${t('claude_current_block')}  ${block.total_tokens_compact ?? ''}`,
-                resets ? `${t('reset')} ${resets}` : '',
-                'poketokenbar-subtle'));
+                resets, 'poketokenbar-subtle'));
         }
     }
 });

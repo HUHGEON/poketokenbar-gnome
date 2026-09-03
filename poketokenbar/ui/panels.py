@@ -48,21 +48,28 @@ REPO_URL = "https://github.com/HUHGEON/poketokenbar-gnome"
 UPSTREAM_URL = "https://github.com/chattymin/PokeTokenBar"
 
 
+def remaining_seconds(iso: str | None) -> float | None:
+    """Seconds until an ISO instant, or None if it is not one."""
+    if not iso:
+        return None
+    try:
+        moment = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return (moment - datetime.now(timezone.utc)).total_seconds()
+
+
 def resets_in(iso: str | None, strings) -> str:
     """"2시간 36분" from an ISO instant.
 
     `resets_at` arrives as the raw timestamp the API returned; printed verbatim
     it is data rather than an answer to "how long have I got".
     """
-    if not iso:
+    remaining = remaining_seconds(iso)
+    if remaining is None:
         return ""
-    try:
-        moment = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
-    except (ValueError, TypeError):
-        return ""
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    remaining = (moment - datetime.now(timezone.utc)).total_seconds()
     if remaining <= 0:
         return strings("resetting_now")
     return duration(remaining, strings)
@@ -424,12 +431,18 @@ class HomePanel(Panel):
         block = blocks.get("claude_code")
         if not block:
             return
-        countdown = resets_in(block.get("end_time"), self.t)
+        # A block runs five hours from its earliest entry, so once that hour is
+        # past there is nothing left to count down to: the window has simply
+        # gone quiet. Printing "reset" beside "resetting now" said nothing and
+        # said it permanently.
+        remaining = remaining_seconds(block.get("end_time"))
+        countdown = (
+            f"{self.t('reset')} {duration(remaining, self.t)}"
+            if remaining is not None and remaining > 0 else "")
         self.add(spread(
             row(label(self.t("claude_current_block"), dim=True),
                 label(block.get("total_tokens_compact", ""), bold=True)),
-            label(f"{self.t('reset')} {countdown}" if countdown else "",
-                  faint=True, size=12),
+            label(countdown, faint=True, size=12),
         ))
 
 

@@ -153,38 +153,64 @@ export function grouped(value) {
 }
 
 
+/** Seconds until an ISO-8601 instant, or null if it is not one. */
+export function remainingSeconds(iso) {
+    if (!iso)
+        return null;
+    const remaining = new Date(iso).getTime() - Date.now();
+    return Number.isNaN(remaining) ? null : remaining / 1000;
+}
+
+/** A coarse "two units" duration, the way the popover writes a countdown.
+ *
+ * Two units at most and never a smaller beside a larger: "6일 2시간",
+ * "2시간 36분", "26초". Through the catalogue, because it used to build
+ * "6d 2h" out of English letters — so a Korean install counted down in
+ * English under a Korean label.
+ */
+export function duration(seconds, strings) {
+    const total = Math.max(0, Math.floor(seconds));
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    const unit = (key, value) => strings(key).replace('%1', String(value));
+    if (days)
+        return hours ? `${unit('unit_day', days)} ${unit('unit_hour', hours)}` : unit('unit_day', days);
+    if (hours)
+        return minutes ? `${unit('unit_hour', hours)} ${unit('unit_minute', minutes)}` : unit('unit_hour', hours);
+    if (minutes)
+        return secs ? `${unit('unit_minute', minutes)} ${unit('unit_second', secs)}` : unit('unit_minute', minutes);
+    return unit('unit_second', secs);
+}
+
 /**
- * "resets in 2h 15m" from an ISO-8601 instant.
+ * "2시간 36분" from an ISO-8601 instant.
  *
  * `resets_at` arrives as the raw timestamp the API returned. Rendering it
  * verbatim puts `2026-09-03T10:00:00Z` under the meter, which is data rather
  * than an answer to "how long have I got".
  */
 export function resetsIn(iso, strings) {
-    if (!iso)
-        return '';
-    const remaining = new Date(iso).getTime() - Date.now();
-    if (Number.isNaN(remaining))
+    const remaining = remainingSeconds(iso);
+    if (remaining === null)
         return '';
     if (remaining <= 0)
         return strings('resetting_now');
-    const minutes = Math.floor(remaining / 60000);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    if (days > 0)
-        return `${days}d ${hours % 24}h`;
-    if (hours > 0)
-        return `${hours}h ${minutes % 60}m`;
-    return `${minutes}m`;
+    return duration(remaining, strings);
 }
 
-/** "just now" / "3 min ago" for the footer's freshness line. */
-export function ago(seconds) {
+/** "방금 갱신" / "3분 전 갱신" for the footer's freshness line.
+ *
+ * It used to return English regardless of the language, which is the one
+ * string on screen at all times.
+ */
+export function ago(seconds, strings) {
     if (seconds === null || seconds === undefined)
         return '';
     if (seconds < 90)
-        return 'just now';
-    return `${Math.round(seconds / 60)} min ago`;
+        return strings('updated_just_now');
+    return strings('updated_minutes_ago').replace('%1', String(Math.round(seconds / 60)));
 }
 
 /** A small pill, for badges like RAISING or a provider incident. */

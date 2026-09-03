@@ -458,6 +458,70 @@ STRINGS: dict[str, tuple[str, ...]] = {
     "nature_sassy": ("Sassy", "건방", "なまいき", "Grosera", "Malpoli", "Atrevida", "Forsch"),
     "nature_careful": ("Careful", "신중", "しんちょう", "Cauta", "Prudent", "Cautelosa", "Sacht"),
     "nature_quirky": ("Quirky", "변덕", "きまぐれ", "Rara", "Bizarre", "Excêntrica", "Kauzig"),
+    # --- hatches, evolutions, graduations --------------------------------
+    # The celebration banner and the desktop notification share these. Both
+    # were hardcoded English, so a Korean install was congratulated in English
+    # at exactly the moments the app is trying to be charming.
+    "notify_hatch_title": (
+        "\U0001f95a Hatched!", "\U0001f95a 부화!", "\U0001f95a 孵化！",
+        "\U0001f95a ¡Eclosionó!", "\U0001f95a Éclosion !", "\U0001f95a Chocou!",
+        "\U0001f95a Geschlüpft!",
+    ),
+    "notify_hatch_body": (
+        "%1 hatched from the egg!", "알에서 %1이(가) 나왔어요!",
+        "タマゴから %1 が生まれました！", "¡%1 salió del huevo!",
+        "%1 est sorti de l'œuf !", "%1 saiu do ovo!",
+        "%1 ist aus dem Ei geschlüpft!",
+    ),
+    "notify_shiny_title": (
+        "\u2728 Shiny Pokemon!", "\u2728 이로치 포켓몬!", "\u2728 色違いポケモン！",
+        "\u2728 ¡Pokemon variocolor!", "\u2728 Pokemon chromatique !",
+        "\u2728 Pokemon shiny!", "\u2728 Schillerndes Pokemon!",
+    ),
+    "notify_shiny_body": (
+        "A shiny %1 hatched! (1 in %2)", "이로치 %1이(가) 태어났어요! (1/%2)",
+        "色違いの %1 が生まれました！(1/%2)", "¡Nació un %1 variocolor! (1 entre %2)",
+        "Un %1 chromatique est né ! (1 sur %2)", "Nasceu um %1 shiny! (1 em %2)",
+        "Ein schillerndes %1 ist geschlüpft! (1/%2)",
+    ),
+    "notify_evolve_title": (
+        "\u2728 Evolved!", "\u2728 진화!", "\u2728 進化！", "\u2728 ¡Evolucionó!",
+        "\u2728 Évolution !", "\u2728 Evoluiu!", "\u2728 Entwicklung!",
+    ),
+    "notify_evolve_body": (
+        "Evolved into %1!", "%1(으)로 진화했어요!", "%1 に進化しました！",
+        "¡Evolucionó a %1!", "A évolué en %1 !", "Evoluiu para %1!",
+        "Hat sich zu %1 entwickelt!",
+    ),
+    "notify_graduate_title": (
+        "\U0001f393 Graduated!", "\U0001f393 졸업!", "\U0001f393 卒業！",
+        "\U0001f393 ¡Graduado!", "\U0001f393 Diplômé !", "\U0001f393 Formatura!",
+        "\U0001f393 Abschied!",
+    ),
+    "notify_graduate_body": (
+        "%1 — saved to your Pokedex! A new egg has arrived.",
+        "%1 — 도감에 보존! 새 알이 도착했어요.",
+        "%1 — 図鑑に保存！新しいタマゴが届きました。",
+        "%1 — ¡guardado en tu Pokedex! Ha llegado un nuevo huevo.",
+        "%1 — conservé dans ton Pokedex ! Un nouvel œuf est arrivé.",
+        "%1 — guardado na sua Pokedex! Chegou um novo ovo.",
+        "%1 – in deinem Pokedex gespeichert! Ein neues Ei ist da.",
+    ),
+    "notify_ditto_title": (
+        "\U0001f3ad Huh? It's Ditto!", "\U0001f3ad 어라? 메타몽!",
+        "\U0001f3ad あれ？メタモン！", "\U0001f3ad ¿Eh? ¡Es Ditto!",
+        "\U0001f3ad Hein ? C'est Métamorph !", "\U0001f3ad Ué? É um Ditto!",
+        "\U0001f3ad Huch? Ditto!",
+    ),
+    "notify_ditto_body": (
+        "You thought it was %1 — it was Ditto all along!",
+        "%1인 줄 알았는데 — 사실은 메타몽이었어요!",
+        "%1 だと思ってた… 実はメタモンでした！",
+        "Pensabas que era %1 — ¡en realidad era Ditto!",
+        "Tu croyais que c'était %1 — c'était Métamorph depuis le début !",
+        "Você achava que era %1 — era um Ditto o tempo todo!",
+        "Du dachtest, es wäre %1 – dabei war es die ganze Zeit Ditto!",
+    ),
     "weekly_model": (
         "Weekly %1", "주간 %1", "週間 %1", "Semanal %1", "Hebdo %1", "Semanal %1",
         "%1 – wöchentlich",

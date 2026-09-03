@@ -154,10 +154,25 @@ class Notifier:
         # kind -> highest tier already announced (1 = warn, 2 = crit).
         self._limit_tier: dict[str, int] = {}
 
-    def companion(self, events, name: str | None = None) -> None:
+    def companion(self, events, name: str | None = None,
+                  banner: dict | None = None) -> None:
+        """Announce a hatch, an evolution or a graduation.
+
+        The wording comes from the celebration the store has already built, so
+        the notification and the banner say the same thing in the same
+        language. These used to be English sentences written here, which is
+        how a Korean install got an English notification.
+        """
         if events is None:
             return
-        label = name or "Your companion"
+        if banner and banner.get("title"):
+            if (events.hatched is not None or events.evolved_to is not None
+                    or events.graduated is not None or events.ditto_revealed):
+                self._send(banner["title"], banner.get("detail", ""))
+            return
+
+        # No banner to borrow from — a caller that only has the events.
+        label = name or "PokeTokenBar"
         if events.hatched is not None:
             self._send("An egg hatched!", f"{label} joined you.")
         if events.evolved_to is not None:

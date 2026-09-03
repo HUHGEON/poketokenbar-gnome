@@ -93,37 +93,51 @@ class CompanionStore:
         self._persist()
 
     def _note_celebration(self, events) -> None:
+        """The banner the popup shows once, in the save's language.
+
+        Every one of these was a hardcoded English sentence, so a Korean
+        install was congratulated in English at exactly the moments the app is
+        trying to be charming. The notification uses the same strings.
+        """
         if events is None:
             return
         mon = self.state.active
         name = self.species_name(mon.current_id, self.state.language) if mon else ""
         if events.ditto_revealed:
+            disguise = self.species_name(
+                mon.ditto_disguise, self.state.language) if mon else ""
             self.celebration = {
                 "kind": "ditto",
-                "title": "Huh? It's Ditto!",
-                "detail": "Your companion was a Ditto all along.",
+                "title": self._text("notify_ditto_title"),
+                "detail": self._text("notify_ditto_body", disguise or name),
             }
         elif events.graduated is not None:
+            # From the record, not from the companion: graduating clears the
+            # slot, so by the time this runs there is no active Pokemon to take
+            # a name from and the banner read "? — saved to your Pokedex".
+            graduate_name = self.species_name(
+                events.graduated.final_id, self.state.language)
             self.celebration = {
                 "kind": "graduated",
-                "title": "Graduated!",
-                "detail": f"{name or 'It'} joined your Pokedex.",
+                "title": self._text("notify_graduate_title"),
+                "detail": self._text("notify_graduate_body", graduate_name),
             }
         elif events.evolved_to is not None:
             self.celebration = {
                 "kind": "evolved",
-                "title": "Evolved!",
-                "detail": f"It became {name}." if name else "It evolved.",
+                "title": self._text("notify_evolve_title"),
+                "detail": self._text("notify_evolve_body", name or "?"),
             }
         elif events.hatched is not None:
             shiny = mon is not None and mon.is_shiny
             self.celebration = {
                 "kind": "shiny" if shiny else "hatched",
-                "title": "A shiny hatched!" if shiny else "It hatched!",
+                "title": self._text(
+                    "notify_shiny_title" if shiny else "notify_hatch_title"),
                 "detail": (
-                    f"A shiny {name} — 1 in {balance.SHINY_DENOMINATOR}!"
-                    if shiny
-                    else f"{name} came out of the egg."
+                    self._text("notify_shiny_body", name,
+                               balance.SHINY_DENOMINATOR)
+                    if shiny else self._text("notify_hatch_body", name)
                 ),
             }
 

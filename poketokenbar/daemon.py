@@ -278,6 +278,7 @@ class Daemon:
                     self.notifier.companion(
                         self.companion_store.last_events,
                         companion_payload.get("name"),
+                        self.companion_store.celebration,
                     )
                     self.companion_store.last_events = None
             except Exception as exc:
