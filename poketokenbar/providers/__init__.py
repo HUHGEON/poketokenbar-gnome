@@ -18,6 +18,7 @@ from .claude import ClaudeProvider
 from .codex import CodexProvider
 from .gemini import GeminiProvider
 from .copilot import CopilotProvider
+from .cursor import CursorProvider
 from .grok import GrokProvider
 from .hermes import HermesProvider
 from .opencode import OpenCodeProvider
@@ -33,6 +34,7 @@ REGISTRY: list[type] = [
     OpenCodeProvider,
     HermesProvider,
     CopilotProvider,
+    CursorProvider,
 ]
 
 
@@ -61,4 +63,5 @@ __all__ = [
     "OpenCodeProvider",
     "HermesProvider",
     "CopilotProvider",
+    "CursorProvider",
 ]
