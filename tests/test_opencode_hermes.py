@@ -1,0 +1,283 @@
+"""OpenCode and Hermes parsing — ports LocalAdditionalUsageTests.swift.
+
+Both are SQLite-backed, and the Swift suite carries their real schemas, so the
+readers can be verified without either tool installed.
+"""
+
+import json
+import sqlite3
+
+import pytest
+
+from poketokenbar.providers import hermes, opencode
+
+
+def execute(path, sql):
+    connection = sqlite3.connect(path)
+    try:
+        connection.executescript(sql)
+        connection.commit()
+    finally:
+        connection.close()
+    return path
+
+
+# MARK: OpenCode
+
+
+OPENCODE_PAYLOAD = {
+    "id": "msg-1",
+    "sessionID": "session-1",
+    "providerID": "anthropic",
+    "modelID": "claude-sonnet-4-20250514",
+    "time": {"created": 1767312000000},
+    "tokens": {"input": 100, "output": 50, "total": 250, "cache": {"read": 10, "write": 20}},
+    "cost": 0.25,
+}
+
+
+def test_opencode_reads_sqlite_and_preserves_reported_total_and_cost(tmp_path):
+    database = tmp_path / "opencode.db"
+    execute(
+        database,
+        """
+        CREATE TABLE message (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            time_created INTEGER NOT NULL,
+            data TEXT NOT NULL
+        );
+        INSERT INTO message VALUES (
+            'msg-1', 'session-1', 1767312000000, '%s'
+        );
+        """
+        % json.dumps(OPENCODE_PAYLOAD).replace("'", "''"),
+    )
+    entries = opencode.parse_database(database)
+    assert len(entries) == 1
+    e = entries[0]
+    assert e.input == 100
+    assert e.output == 120, "unclassified total tokens are retained as output"
+    assert e.cache_write == 20
+    assert e.cache_read == 10
+    assert e.total == 250
+    assert e.explicit_cost == 0.25
+
+
+def test_opencode_falls_back_to_a_database_without_time_created(tmp_path):
+    """Older stores have no such column; the query fails and the second form runs."""
+    payload = dict(
+        OPENCODE_PAYLOAD,
+        id="legacy-1",
+        providerID="openai",
+        modelID="gpt-5",
+        tokens={"input": 7, "output": 3, "cache": {"read": 2, "write": 1}},
+        cost=0,
+    )
+    database = tmp_path / "opencode.db"
+    execute(
+        database,
+        """
+        CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, data TEXT NOT NULL);
+        INSERT INTO message VALUES ('legacy-1', 'session-1', '%s');
+        """
+        % json.dumps(payload).replace("'", "''"),
+    )
+    entries = opencode.parse_database(database)
+    assert len(entries) == 1
+    assert entries[0].total == 13
+
+
+def test_opencode_zero_cost_is_not_recorded_as_a_charge(tmp_path):
+    """0 means the store had no figure, not that the turn was free."""
+    payload = dict(OPENCODE_PAYLOAD, cost=0)
+    assert opencode.parse_message(payload, "x").explicit_cost is None
+
+
+def test_opencode_legacy_message_files_are_read(tmp_path):
+    root = tmp_path / ".local" / "share" / "opencode" / "storage" / "message"
+    root.mkdir(parents=True)
+    (root / "msg-1.json").write_text(json.dumps(OPENCODE_PAYLOAD), encoding="utf-8")
+
+    entries = opencode.OpenCodeProvider(home=tmp_path).scan_entries()
+    assert len(entries) == 1
+    assert entries[0].total == 250
+
+
+def test_opencode_payload_without_provider_is_not_a_billed_message():
+    payload = {k: v for k, v in OPENCODE_PAYLOAD.items() if k != "providerID"}
+    assert opencode.parse_message(payload, "x") is None
+
+
+def test_opencode_named_channel_database_is_used_when_standard_is_absent(tmp_path):
+    root = tmp_path / ".local" / "share" / "opencode"
+    root.mkdir(parents=True)
+    execute(
+        root / "opencode-nightly.db",
+        """
+        CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, data TEXT NOT NULL);
+        INSERT INTO message VALUES ('m', 's', '%s');
+        """
+        % json.dumps(OPENCODE_PAYLOAD).replace("'", "''"),
+    )
+    entries = opencode.OpenCodeProvider(home=tmp_path).scan_entries()
+    assert len(entries) == 1
+
+
+@pytest.mark.parametrize(
+    "name", ["opencode-.db", "opencode-../evil.db", "opencode-a b.db", "notopencode.db"]
+)
+def test_opencode_rejects_channel_names_outside_the_identifier_set(name):
+    assert not opencode._is_channel_database(name)
+
+
+def test_opencode_roots_use_the_xdg_data_path(tmp_path):
+    assert opencode.roots(home=tmp_path, env={}) == [
+        tmp_path / ".local" / "share" / "opencode"
+    ]
+    custom = tmp_path / "elsewhere"
+    assert opencode.roots(home=tmp_path, env={"OPENCODE_DATA_DIR": str(custom)}) == [custom]
+
+
+# MARK: Hermes
+
+
+HERMES_SCHEMA = """
+CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    model TEXT,
+    billing_provider TEXT,
+    started_at REAL NOT NULL,
+    message_count INTEGER DEFAULT 0,
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    cache_read_tokens INTEGER DEFAULT 0,
+    cache_write_tokens INTEGER DEFAULT 0,
+    reasoning_tokens INTEGER DEFAULT 0,
+    estimated_cost_usd REAL,
+    actual_cost_usd REAL
+);
+"""
+
+
+def test_hermes_reads_session_tokens_reasoning_and_actual_cost(tmp_path):
+    database = tmp_path / "state.db"
+    execute(
+        database,
+        HERMES_SCHEMA
+        + """
+        INSERT INTO sessions VALUES (
+            'session-1', 'claude-sonnet-4-20250514', 'anthropic', 1767312000, 42,
+            100, 50, 10, 20, 5, 0.12, 0.34
+        );
+        """,
+    )
+    entries = hermes.parse_database(database)
+    assert len(entries) == 1
+    e = entries[0]
+    assert e.input == 100
+    assert e.output == 55, "Hermes bills reasoning on top of output, not inside it"
+    assert e.cache_write == 20
+    assert e.cache_read == 10
+    assert e.total == 185
+    assert e.explicit_cost == 0.34, "the actual charge wins over the estimate"
+
+
+def test_hermes_falls_back_to_the_estimate_when_no_actual_cost(tmp_path):
+    database = tmp_path / "state.db"
+    execute(
+        database,
+        HERMES_SCHEMA
+        + """
+        INSERT INTO sessions VALUES (
+            's', 'm', 'p', 1767312000, 1, 10, 5, 0, 0, 0, 0.12, 0
+        );
+        """,
+    )
+    assert hermes.parse_database(database)[0].explicit_cost == 0.12
+
+
+def test_hermes_accepts_a_millisecond_started_at(tmp_path):
+    database = tmp_path / "state.db"
+    execute(
+        database,
+        HERMES_SCHEMA
+        + """
+        INSERT INTO sessions VALUES (
+            'session-ms', 'gpt-5', 'openai', 1767312000000, 1, 10, 5, 0, 0, 0, 0, 0
+        );
+        """,
+    )
+    entries = hermes.parse_database(database)
+    assert len(entries) == 1
+    assert entries[0].total == 15
+    assert abs(entries[0].date.timestamp() - 1767312000) < 0.001
+
+
+def test_hermes_rows_without_a_model_are_skipped(tmp_path):
+    """A session with no model never reached a provider."""
+    database = tmp_path / "state.db"
+    execute(
+        database,
+        HERMES_SCHEMA
+        + """
+        INSERT INTO sessions VALUES ('a', NULL, 'p', 1767312000, 1, 10, 5, 0, 0, 0, 0, 0);
+        INSERT INTO sessions VALUES ('b', '   ', 'p', 1767312000, 1, 10, 5, 0, 0, 0, 0, 0);
+        """,
+    )
+    assert hermes.parse_database(database) == []
+
+
+def test_hermes_provider_reads_the_state_database_under_home(tmp_path):
+    root = tmp_path / ".hermes"
+    root.mkdir()
+    execute(
+        root / "state.db",
+        HERMES_SCHEMA
+        + """
+        INSERT INTO sessions VALUES ('s', 'm', 'p', 1767312000, 1, 10, 5, 0, 0, 0, 0, 0);
+        """,
+    )
+    assert len(hermes.HermesProvider(home=tmp_path).scan_entries()) == 1
+
+
+def test_hermes_roots_default_and_override(tmp_path):
+    assert hermes.roots(home=tmp_path, env={}) == [tmp_path / ".hermes"]
+    custom = tmp_path / "elsewhere"
+    assert hermes.roots(home=tmp_path, env={"HERMES_HOME": str(custom)}) == [custom]
+
+
+# MARK: shared SQLite behaviour
+
+
+def test_wal_writes_invalidate_the_cached_blob(tmp_path):
+    """A WAL store takes writes without the main file's stat moving.
+
+    Keying the blob cache on the database alone would keep serving the old
+    parse, so the usage would simply stop updating until something else
+    happened to touch the file.
+    """
+    provider = hermes.HermesProvider()
+    database = tmp_path / "state.db"
+    execute(database, HERMES_SCHEMA)
+    before = provider.file_signature(database)
+
+    wal = tmp_path / "state.db-wal"
+    wal.write_bytes(b"x" * 32)
+    after = provider.file_signature(database)
+    assert after != before
+
+
+def test_shm_is_excluded_from_the_signature(tmp_path):
+    """A read-only connection writes read marks into -shm.
+
+    Including it would let this reader invalidate the blob it had just written,
+    on every sweep, forever.
+    """
+    provider = hermes.HermesProvider()
+    database = tmp_path / "state.db"
+    execute(database, HERMES_SCHEMA)
+    before = provider.file_signature(database)
+
+    (tmp_path / "state.db-shm").write_bytes(b"y" * 64)
+    assert provider.file_signature(database) == before

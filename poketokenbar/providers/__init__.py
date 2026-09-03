@@ -18,6 +18,8 @@ from .claude import ClaudeProvider
 from .codex import CodexProvider
 from .gemini import GeminiProvider
 from .grok import GrokProvider
+from .hermes import HermesProvider
+from .opencode import OpenCodeProvider
 from .pi import OmpProvider, PiProvider
 
 REGISTRY: list[type] = [
@@ -27,6 +29,8 @@ REGISTRY: list[type] = [
     PiProvider,
     OmpProvider,
     GrokProvider,
+    OpenCodeProvider,
+    HermesProvider,
 ]
 
 
@@ -52,4 +56,6 @@ __all__ = [
     "PiProvider",
     "OmpProvider",
     "GrokProvider",
+    "OpenCodeProvider",
+    "HermesProvider",
 ]

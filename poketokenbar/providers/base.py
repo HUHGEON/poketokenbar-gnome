@@ -191,6 +191,20 @@ class ScanningProvider:
     def dedup(self, entries: list[Entry]) -> list[Entry]:
         return dedup_keep_max(entries)
 
+    def file_signature(self, path: Path) -> tuple[float, int] | None:
+        """(mtime, size) the parsed-blob cache is keyed on, or None to skip.
+
+        Overridden by the SQLite-backed sources: a WAL database can take writes
+        without the main file's mtime or size moving at all, so keying on it
+        alone would serve a stale blob until something else happened to touch
+        the file.
+        """
+        try:
+            stat = path.stat()
+        except OSError:
+            return None
+        return (stat.st_mtime, stat.st_size)
+
     # --- shared machinery --------------------------------------------------
 
     def existing_roots(self, candidates: list[Path]) -> list[Path]:
@@ -227,26 +241,21 @@ class ScanningProvider:
                 if key in seen_files:
                     continue
                 seen_files.add(key)
-                try:
-                    stat = path.stat()
-                except OSError:
+                signature = self.file_signature(path)
+                if signature is None:
                     continue
+                mtime, size = signature
                 live.add(key)
                 entries = None
                 if self._cache is not None:
                     entries = self._cache.get(
-                        self.id, path, stat.st_mtime, stat.st_size, self.PARSER_VERSION
+                        self.id, path, mtime, size, self.PARSER_VERSION
                     )
                 if entries is None:
                     entries = self.parse_file(path)
                     if self._cache is not None:
                         self._cache.put(
-                            self.id,
-                            path,
-                            stat.st_mtime,
-                            stat.st_size,
-                            self.PARSER_VERSION,
-                            entries,
+                            self.id, path, mtime, size, self.PARSER_VERSION, entries
                         )
                 all_entries.extend(entries)
         if self._cache is not None:
