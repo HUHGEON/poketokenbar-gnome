@@ -22,7 +22,11 @@ REST_BASE = "https://pokeapi.co/api/v2"
 GRAPHQL_URL = "https://graphql.pokeapi.co/v1beta2"
 # Gen I-V. The animated Black/White sprites the panel uses stop here.
 MAX_SPECIES_ID = 649
-LANG_CODES = ("ko", "en", "ja-Hrkt", "ja", "es")
+# Lockstep with l10n.LANGUAGES, so a Pokemon's name is available in whatever
+# language the UI is set to. "pt" collects nothing today — PokeAPI has no such
+# language — but is listed so it is picked up the moment one appears; omitting
+# it would pin Portuguese users to English names forever.
+LANG_CODES = ("ko", "en", "ja-Hrkt", "ja", "es", "fr", "pt", "de")
 # PokéAPI's GraphQL endpoint answers 403 to urllib's default User-Agent.
 USER_AGENT = "poketokenbar/0.1 (+https://github.com/chattymin/PokeTokenBar)"
 
