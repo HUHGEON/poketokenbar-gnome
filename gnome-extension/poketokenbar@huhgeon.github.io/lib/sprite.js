@@ -17,6 +17,8 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
+import {DEFAULT_QUALITY, capFrameRate, frameFloor} from './framecap.js';
+
 // GIF authoring commonly writes 0 or 10ms delays meaning "as fast as possible",
 // which browsers clamp. Without a floor a sprite would spin the compositor.
 const MINIMUM_FRAME_MS = 20;
@@ -81,7 +83,9 @@ export function decodeFrames(path) {
 
     let elapsedMs = 0;
     for (let i = 0; i < MAX_FRAMES; i++) {
-        const delay = Math.max(MINIMUM_FRAME_MS, iter.get_delay_time());
+        // get_delay_time is milliseconds; framecap and the frames themselves
+        // work in seconds, so the conversion happens once, here.
+        const delay = Math.max(MINIMUM_FRAME_MS, iter.get_delay_time()) / 1000;
         let frame;
         try {
             frame = frameFromPixbuf(iter.get_pixbuf(), delay);
@@ -89,7 +93,7 @@ export function decodeFrames(path) {
             break;
         }
         frames.push(frame);
-        elapsedMs += delay;
+        elapsedMs += delay * 1000;
         // advance() returns false when the frame did not change, which for a
         // loop means we are back where we started.
         if (!iter.advance(null) && i > 0)
@@ -126,6 +130,10 @@ class Sprite extends St.Widget {
         this._timer = 0;
         this._path = null;
         this._paused = false;
+        this._quality = DEFAULT_QUALITY;
+        // Frames as decoded, before the rate cap. Kept so changing quality does
+        // not mean re-reading and re-uploading the whole GIF.
+        this._sourceFrames = [];
 
         this.connect('destroy', () => this._stopTimer());
     }
@@ -141,7 +149,8 @@ class Sprite extends St.Widget {
         this._path = path;
         this._stopTimer();
         this._index = 0;
-        this._frames = decodeFrames(path);
+        this._sourceFrames = decodeFrames(path);
+        this._frames = capFrameRate(this._sourceFrames, frameFloor(this._quality));
 
         if (this._frames.length === 0) {
             this.content = null;
@@ -149,6 +158,25 @@ class Sprite extends St.Widget {
             return;
         }
         this.visible = true;
+        this._applyFrame(0);
+        if (this._frames.length > 1 && !this._paused)
+            this._scheduleNext();
+    }
+
+    /** Change how smoothly this sprite animates.
+     *
+     * Re-caps the frames already decoded rather than reading the file again:
+     * the pixels have not changed, only how many of them get drawn.
+     */
+    setQuality(quality) {
+        if (quality === this._quality)
+            return;
+        this._quality = quality;
+        if (this._sourceFrames.length === 0)
+            return;
+        this._stopTimer();
+        this._frames = capFrameRate(this._sourceFrames, frameFloor(quality));
+        this._index = 0;
         this._applyFrame(0);
         if (this._frames.length > 1 && !this._paused)
             this._scheduleNext();
@@ -199,7 +227,9 @@ class Sprite extends St.Widget {
 
     _scheduleNext() {
         const frame = this._frames[this._index];
-        const delay = frame ? frame.delay : MINIMUM_FRAME_MS;
+        // framecap works in seconds, GLib in milliseconds.
+        const delay = Math.max(
+            MINIMUM_FRAME_MS, Math.round((frame ? frame.delay : 0.1) * 1000));
         this._timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
             this._timer = 0;
             this._index = (this._index + 1) % this._frames.length;

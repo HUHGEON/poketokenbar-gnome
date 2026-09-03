@@ -474,8 +474,29 @@ const TOGGLES = [
     {key: 'show_tokens_in_menu', string: 'todays_tokens'},
     {key: 'show_cost_in_menu', string: 'price'},
     {key: 'show_limit_in_menu', string: 'limits_official'},
+    {key: 'limit_notifications', string: 'limits_official'},
+    {key: 'companion_notifications', string: 'raising'},
+    {key: 'status_checks_enabled', string: 'refresh'},
     {key: 'floating_pet_enabled', string: 'raising'},
+    {key: 'floating_pet_bubble_alerts', string: 'limits_official'},
 ];
+
+// Numeric settings, as a stepper rather than a text field: every one of these
+// has a range outside which the daemon misbehaves quietly — a two-second
+// refresh hammers the disk, a 0px pet is invisible — and a stepper cannot
+// express a value outside it.
+const STEPPERS = [
+    {key: 'refresh_interval', label: 'Refresh every (s)', min: 60, max: 900, step: 60},
+    {key: 'warn_threshold', label: 'Warn at (%)', min: 50, max: 95, step: 5},
+    {key: 'crit_threshold', label: 'Critical at (%)', min: 60, max: 99, step: 1},
+    {key: 'floating_pet_size', label: 'Pet size (px)', min: 48, max: 192, step: 12},
+];
+
+// Which limit windows the panel shows.
+const LIMIT_MODES = ['both', 'session', 'weekly'];
+
+// Frame-rate presets. The values live in framecap.js next to the algorithm.
+const QUALITIES = ['saver', 'balanced', 'smooth'];
 
 export const SettingsSection = GObject.registerClass(
 class SettingsSection extends Section {
@@ -496,7 +517,11 @@ class SettingsSection extends Section {
         this.add_child(heading(this._reader.text('refresh')));
         for (const toggle of TOGGLES)
             this._addToggle(toggle.key, toggle.string, config);
+        for (const stepper of STEPPERS)
+            this._addStepper(stepper, config);
 
+        this._addChoice('limit_display_mode', LIMIT_MODES, config);
+        this._addChoice('animation_quality', QUALITIES, config);
         this._addLanguage(config);
         this._addScanFolders(state);
     }
@@ -506,6 +531,33 @@ class SettingsSection extends Section {
             this._reader.text(stringKey),
             Boolean(config[key]),
             value => Config.set(key, value)));
+    }
+
+    _addStepper(spec, config) {
+        const current = Number(config[spec.key]) || spec.min;
+        const clamp = value => Math.max(spec.min, Math.min(spec.max, value));
+        const value = label(String(current), 'poketokenbar-value');
+        const spacer = new St.Widget({x_expand: true});
+        this.add_child(row([
+            label(spec.label, 'poketokenbar-key'),
+            spacer,
+            button('−', () => Config.set(spec.key, clamp(current - spec.step))),
+            value,
+            button('+', () => Config.set(spec.key, clamp(current + spec.step))),
+        ]));
+    }
+
+    _addChoice(key, options, config) {
+        const current = config[key];
+        const buttons = options.map(option => {
+            const widget = button(option, () => Config.set(key, option));
+            // The chosen one stays flat rather than disabled: a disabled button
+            // reads as unavailable, not as selected.
+            widget.opacity = option === current ? 255 : 130;
+            return widget;
+        });
+        this.add_child(row([label(key, 'poketokenbar-key')]));
+        this.add_child(row(buttons));
     }
 
     _addLanguage(config) {

@@ -443,3 +443,32 @@ def test_no_payload_access_escapes_the_declared_accessors():
         "these read payload-shaped fields but are not declared accessors: "
         + str({k: sorted(set(v)) for k, v in escaped.items()})
     )
+
+
+def test_every_daemon_setting_is_reachable_from_the_ui():
+    """A setting nobody can change may as well not exist.
+
+    The daemon owns seventeen; the extension exposed four for a while, and the
+    rest were reachable only from poketokenctl. The exceptions below are the
+    ones a UI genuinely should not offer, each with its reason.
+    """
+    from poketokenbar import config as config_module
+
+    source = "\n".join(
+        p.read_text(encoding="utf-8") for p in (EXTENSION_DIR / "lib").glob("*.js")
+    )
+    reachable = set(re.findall(r"""\{key:\s*['"](\w+)['"]""", source))
+    reachable.update(re.findall(r"""Config\.set\(\s*['"](\w+)['"]""", source))
+    reachable.update(re.findall(r"""_addChoice\(\s*['"](\w+)['"]""", source))
+
+    not_for_the_ui = {
+        # Written by dragging the pet, not by typing a coordinate.
+        "floating_pet_x",
+        "floating_pet_y",
+        # Edited per provider through its own field, not as one blob.
+        "custom_scan_roots",
+        # Chosen from the language row.
+        "language",
+    }
+    missing = set(config_module.DEFAULTS) - reachable - not_for_the_ui
+    assert not missing, f"settings with no control anywhere in the UI: {sorted(missing)}"

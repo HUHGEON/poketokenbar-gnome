@@ -15,6 +15,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import * as Commands from './commands.js';
+import {DEFAULT_QUALITY} from './framecap.js';
 import {Sprite} from './sprite.js';
 import {
     BagSection, CollectionSection, HomeSection, SettingsSection, ShopSection,
@@ -162,6 +163,7 @@ class Indicator extends PanelMenu.Button {
 
     _renderPanel(state) {
         const panel = state?.panel;
+        this._sprite.setQuality(state?.config?.animation_quality ?? DEFAULT_QUALITY);
         const companion = state?.companion;
 
         this._sprite.setPath(panel?.sprite_path || null);
