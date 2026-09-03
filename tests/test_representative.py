@@ -190,3 +190,75 @@ def test_a_save_written_before_the_field_existed_still_loads():
 
 def test_a_non_integer_pin_in_a_save_is_ignored():
     assert save.decode({"representative_species_id": "3"}).representative_species_id is None
+
+
+# MARK: a pin that grows with what it names
+
+
+def evolve(state):
+    """Feed the companion exactly enough to advance one stage."""
+    from poketokenbar import balance, companion
+
+    mon = state.active
+    threshold = balance.phase_threshold(mon.rarity, mon.total_forms, mon.stage_index)
+    return companion.apply_usage(state, threshold - mon.used_at_stage)
+
+
+def test_a_pin_on_the_current_form_follows_the_evolution():
+    """The ordinary reason to pin is "show me what I am raising, as it is now".
+
+    Leaving the panel on the outgrown form made the evolution look like it had
+    not happened at all — the notification arrived and the picture did not move.
+    """
+    state = CompanionState(active=raising(path=(4, 5, 6), stage=0))
+    state.representative_species_id = 4
+
+    events = evolve(state)
+
+    assert events.evolved_to == 5
+    assert state.representative_species_id == 5
+    assert store(state).panel_species() == (5, False)
+
+
+def test_a_pin_on_another_form_is_left_alone():
+    """A pin on anything else names a species someone chose over the companion,
+    and the companion growing is no reason to overrule it."""
+    state = CompanionState(dex=[graduated(chain=(1, 2, 3))], active=raising(stage=0))
+    state.representative_species_id = 2
+
+    evolve(state)
+
+    assert state.active.current_id == 5
+    assert state.representative_species_id == 2
+
+
+def test_a_pin_follows_every_stage_of_a_run():
+    """Overflow can carry a companion through more than one stage at a time; the
+    pin has to arrive where the companion does, not one form behind it."""
+    from poketokenbar import balance, companion
+
+    state = CompanionState(active=raising(path=(4, 5, 6), stage=0))
+    state.representative_species_id = 4
+    mon = state.active
+    two_stages = sum(
+        balance.phase_threshold(mon.rarity, mon.total_forms, stage) for stage in (0, 1))
+
+    events = companion.apply_usage(state, two_stages)
+
+    assert events.evolved_to == 6
+    assert state.representative_species_id == state.active.current_id == 6
+
+
+def test_a_pinned_ditto_lands_on_ditto_not_on_the_form_it_faked():
+    """A Ditto's first evolution is a reveal, so the form it was pretending to
+    grow into is one nobody owns. Pinning that would put a species on the panel
+    that is not in anyone's Pokedex."""
+    from poketokenbar import balance
+
+    state = CompanionState(active=raising(path=(4, 5, 6), stage=0, ditto_disguise=4))
+    state.representative_species_id = 4
+
+    events = evolve(state)
+
+    assert events.ditto_revealed
+    assert state.representative_species_id == balance.DITTO_SPECIES_ID

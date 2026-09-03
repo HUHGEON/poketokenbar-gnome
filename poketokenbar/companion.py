@@ -318,6 +318,7 @@ def apply_usage(
         if mon.is_final_form:
             events.graduated = graduate(state, mon)
             break
+        was_showing = mon.current_id
         mon.stage_index += 1
         events.evolved_to = mon.current_id
         # A disguised Ditto reveals itself on its first evolution — the moment
@@ -325,5 +326,17 @@ def apply_usage(
         if mon.ditto_disguise is not None and not mon.ditto_revealed:
             mon.ditto_revealed = True
             events.ditto_revealed = True
+        # A pin on the form that just evolved moves up with it. Pinning the
+        # companion as it is now is the ordinary reason to pin at all, and
+        # leaving the panel on the outgrown form made the evolution look like it
+        # had not happened. A pin on any *other* form stays exactly where it is:
+        # that one names a species someone chose over the companion, and the
+        # companion growing is no reason to overrule it.
+        #
+        # Read after the reveal, not before: a Ditto's evolution is into Ditto,
+        # and pinning the form it was only pretending to become would put a
+        # species on the panel that nobody owns.
+        if state.representative_species_id == was_showing:
+            state.representative_species_id = mon.current_id
 
     return events
