@@ -1,10 +1,13 @@
-/* framecap.js — capping a sprite's frame rate without slowing it down.
+/* framecap.js — the sprite arithmetic, kept away from the Shell.
  *
  * Deliberately free of any gi:// import so it can be run and tested outside a
- * Shell. It is the one piece of sprite handling with an algorithm rather than
- * an API call, and the one place a plausible-looking version is wrong.
+ * Shell. These are the pieces of sprite handling with an algorithm rather than
+ * an API call, and the places a plausible-looking version is wrong.
  *
- * Ports GIFDecoder.capFrameRate. The rule that matters: **decimate, do not
+ * Two of them: how long a loop is (`loopLength`) and how many of its frames get
+ * drawn (`capFrameRate`).
+ *
+ * The second ports GIFDecoder.capFrameRate. The rule that matters: **decimate, do not
  * hold.** Raising each frame's own delay to the floor keeps every frame and
  * stretches the whole loop — upstream measured a Gen-V sprite (55 frames x
  * 0.05s = 2.75s) turning into a 22s loop at a 0.4s floor, an eighth of the
@@ -28,6 +31,41 @@ export const DEFAULT_QUALITY = 'saver';
 
 export function frameFloor(quality) {
     return FRAME_FLOORS[quality] ?? FRAME_FLOORS[DEFAULT_QUALITY];
+}
+
+// How many frames in a row have to match before a repeat counts as the loop
+// starting over rather than a pose the sprite strikes twice.
+export const LOOP_SIGNATURE = 3;
+
+/**
+ * Where a decoded sequence starts over, or 0 when it never does.
+ *
+ * GdkPixbuf hands out frames forever — its iterator wraps round at the end of
+ * the animation rather than stopping — so the decoder has to recognise the wrap
+ * itself. One repeated frame is not evidence enough: a sprite returns to the
+ * same pose several times per loop, and cutting at the first repeat of frame
+ * one throws most of the animation away. Lombre's idle is 112 frames and comes
+ * back to its opening pose at frame 33; only the run of frames after the repeat
+ * tells the two apart.
+ *
+ * `digests` is one comparable value per frame, in order.
+ */
+export function loopLength(digests, signature = LOOP_SIGNATURE) {
+    if (!Array.isArray(digests))
+        return 0;
+    const width = Math.max(1, signature);
+    for (let start = 1; start + width <= digests.length; start++) {
+        let matched = true;
+        for (let offset = 0; offset < width; offset++) {
+            if (digests[start + offset] !== digests[offset]) {
+                matched = false;
+                break;
+            }
+        }
+        if (matched)
+            return start;
+    }
+    return 0;
 }
 
 /**
