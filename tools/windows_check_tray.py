@@ -72,7 +72,9 @@ def check_pet(tray) -> None:
     tray.toggle_window()
     tray._sync_pet(state)
     assert tray.pet is not None and tray.pet.isVisible(), "the pet went away"
-    print(f"  pet     : survives a click, glyph {pet.sprite.text()!r}")
+    # Described, not printed: the Windows console is cp1252 and an emoji in a
+    # print() takes the whole check down with a UnicodeEncodeError.
+    print(f"  pet     : survives a click, fallback glyph {bool(pet.sprite.text())}")
 
 
 if __name__ == "__main__":

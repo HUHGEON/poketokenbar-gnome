@@ -248,3 +248,18 @@ def test_the_windows_check_exercises_the_pet():
     source = check.read_text(encoding="utf-8")
     assert "WindowDoesNotAcceptFocus" in source
     assert "toggle_window()" in source
+
+
+def test_the_windows_checks_print_nothing_the_console_cannot_encode():
+    """The Windows console is cp1252. A single emoji in a print() takes the
+    whole check down with a UnicodeEncodeError, which is a red build over a
+    log line."""
+    tools = (WINDOWS_DIR.parent.parent / "tools").glob("windows_check_*.py")
+    for path in tools:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "print(" not in line:
+                continue
+            try:
+                line.encode("cp1252")
+            except UnicodeEncodeError:
+                raise AssertionError(f"{path.name}:{number} prints non-cp1252 text")
