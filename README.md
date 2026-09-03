@@ -2,51 +2,50 @@
 
 # PokeTokenBar for GNOME
 
-**Your AI coding tokens, hatched into Pokémon — in the GNOME panel.**
+**당신의 AI 코딩 토큰을 포켓몬으로 — GNOME 패널에서.**
 
 [![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-45%2B-4a86cf?logo=gnome&logoColor=white)](https://gnome.org)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 
-**An unofficial GNOME port of [PokeTokenBar](https://github.com/chattymin/PokeTokenBar) by [chattymin](https://github.com/chattymin),**
-**built on the Linux daemon from [poketokenbar-plasma](https://github.com/rubensanchezrivero/poketokenbar-plasma) by [rubensanchezrivero](https://github.com/rubensanchezrivero).**
+**한국어** · [English](README.en.md)
+
+**[chattymin](https://github.com/chattymin) 님의 [PokeTokenBar](https://github.com/chattymin/PokeTokenBar)를 GNOME으로 옮긴 비공식 포트이며,**
+**[rubensanchezrivero](https://github.com/rubensanchezrivero) 님의 [poketokenbar-plasma](https://github.com/rubensanchezrivero/poketokenbar-plasma) 데몬 위에 올렸습니다.**
 
 </div>
 
-The AI coding tokens you are already burning become a growing Pokémon companion
-in your GNOME panel. Spend tokens, hatch an egg, evolve it along its real
-evolution line, graduate it into your Pokédex, and start again. Underneath the
-companion is a precise usage tracker — today's spend and cost, and the official
-5-hour and weekly limits, read straight from your local logs.
+이미 태우고 있는 AI 코딩 토큰이 GNOME 패널 속에서 자라나는 **포켓몬 companion**이 됩니다.
+토큰을 쓰면 알이 부화하고, 실제 진화 계보를 따라 진화하고, 도감에 졸업하고, 다시 새 알이
+시작됩니다. companion 아래에는 정확한 사용량 트래커가 있습니다 — 오늘의 사용량과 비용, 공식
+5시간·주간 한도를 로컬 로그에서 직접 읽습니다.
 
-> Usage is read directly from local files (`totalTokens` = input + output +
-> cache, local date). No external usage CLI, no account, no network needed for
-> the numbers. Unofficial, non-commercial Pokémon fan project — see
-> [License & disclaimer](#license--disclaimer).
+> 사용량은 로컬 파일에서 직접 읽습니다(`totalTokens` = input + output + cache, 로컬 날짜).
+> 외부 사용량 CLI도, 계정도, 숫자를 위한 네트워크도 필요 없습니다. 비공식·비상업 포켓몬 팬
+> 프로젝트입니다 — [라이선스 & 면책](#라이선스--면책) 참고.
 
-## Status
+## 지금 상태
 
-Feature-complete and under CI, but **not yet run on a real GNOME desktop.**
+기능은 다 들어갔고 CI도 초록이지만, **아직 실제 GNOME 데스크탑에서 돌려보지 않았습니다.**
 
 | | |
 |---|---|
-| Usage daemon (12 providers) | ✅ done |
-| GNOME Shell extension | ✅ written |
-| Test suite | ✅ 601 tests, green on CI |
-| Install verified from a clean checkout | ✅ in CI |
-| Verified on a real GNOME desktop | ❌ **not yet** |
+| 사용량 데몬 (프로바이더 12개) | ✅ 완료 |
+| GNOME Shell 확장 | ✅ 작성 완료 |
+| 테스트 | ✅ Python 607개 + JavaScript 13개, CI 초록 |
+| 클린 체크아웃에서 설치 검증 | ✅ CI에서 |
+| 실제 GNOME 데스크탑에서 검증 | ❌ **아직** |
 
-That last row is the honest one. Every field the extension reads is compared
-mechanically against a real daemon payload, and its JavaScript is parsed on
-every push, so a wrong name or a stray character cannot reach you. What no
-check here can tell you is whether an actor renders where it should. If you run
-GNOME, that is exactly the report worth opening an issue for.
+마지막 줄이 정직한 부분입니다. 확장이 읽는 모든 필드는 실제 데몬 payload와 기계적으로 대조되고,
+JavaScript는 푸시마다 파싱되며, 프레임 레이트 계산은 node로 실행해 검증합니다. 그래서 필드 이름이
+틀리거나 문법이 깨진 채로 배포될 수는 없습니다. 다만 **액터가 실제로 그려지는지**는 여기서 확인할
+방법이 없습니다. GNOME을 쓰신다면 그게 바로 이슈로 남겨주실 만한 내용입니다.
 
-## Supported tools
+## 지원 도구
 
-All twelve of the upstream sources are read:
+원본의 12개 소스를 전부 읽습니다.
 
-| Tool | Read from |
+| 도구 | 읽는 위치 |
 |---|---|
 | **Claude Code** | `~/.claude/projects/**.jsonl` |
 | **Codex** | `~/.codex/sessions/**.jsonl` |
@@ -61,28 +60,44 @@ All twelve of the upstream sources are read:
 | **Pi Agent** | `~/.pi/agent/sessions` |
 | **omp** (oh-my-pi) | `~/.omp/agent/sessions` |
 
-Official 5-hour and weekly limits are read for Claude accounts.
+Claude 계정은 공식 5시간·주간 한도까지 읽습니다.
 
-Ten of the twelve read a dotfile path that is identical on macOS and Linux. Two
-do not, and their Linux locations follow the platform convention rather than an
-upstream test — **Cursor** and **Kiro**'s SQLite store. If either reports no
-usage on your machine, `CURSOR_DATA_DIR` and `KIRO_CLI_HOME` override the
-defaults, and a report of where your files actually live is welcome.
+12개 중 10개는 macOS와 완전히 같은 dotfile 경로를 씁니다. 나머지 둘 — **Cursor**와 **Kiro**의
+SQLite 저장소 — 만 위치가 실제로 다르고, 그 리눅스 경로는 원본 테스트가 아니라 플랫폼 관례를
+따랐습니다. 둘 중 하나가 사용량을 못 잡으면 `CURSOR_DATA_DIR`·`KIRO_CLI_HOME`으로 덮어쓸 수
+있고, 실제로 파일이 어디 있었는지 알려주시면 반영하겠습니다.
 
-## How it fits together
+## 기능
+
+- 🥚 **평소처럼 코딩하세요.** 12개 도구에서 태우는 토큰이 알을 품습니다.
+- 🐣 **부화.** [PokéAPI](https://pokeapi.co/)의 1~5세대 진화 계보에서 공식 capture rate 가중으로
+  태어납니다. 25종 성격 중 하나가 정해지고, 아주 드물게 **✨ 이로치**가 나옵니다.
+- ⚡ **진화 → 🎓 졸업.** 실제 진화 트리를 따라 자라고, 최종 진화 후 **도감**에 영구 보존됩니다.
+- 🍬 **한도를 채우면 이상한 사탕.** **가방**에서 써서 지금 포켓몬을 키웁니다.
+- 🛒 **상점.** 쓴 토큰이 곧 재화 — 이상한 사탕, 민트, 이로치 부적, 3등급의 알.
+- 📌 **대표 포켓몬.** 도감에서 고른 종을 패널과 데스크탑 펫에 고정. Home은 계속 키우는 개체를
+  보여줍니다.
+- 🐾 **데스크탑 펫.** 창 위에 떠 있고, 드래그로 옮기고, 호버하면 오늘 사용량이 뜹니다.
+- 📊 **공식 한도.** 5시간·주간 사용률, 리셋 카운트다운, 소진 예측.
+- 🧮 **모델별 내역.** 세션 로그 하나에 모델이 여럿이면 실제 답한 모델 기준으로 나눠 보여줍니다.
+- 📁 **추가 스캔 폴더.** 기본 경로 밖의 로그를 프로바이더별로 지정.
+- 🎚 **애니메이션 품질.** 절약 / 기본 / 부드럽게. 프레임 하나가 재합성 비용이라 실제 전력 설정입니다.
+- 🌐 **7개 언어.** 한국어·영어·일본어·스페인어·프랑스어·포르투갈어·독일어. 포켓몬 이름까지.
+
+## 구조
 
 ```
-poketokend (Python)  ──→  ~/.local/state/poketokenbar/state.json  ──→  GNOME Shell extension
+poketokend (Python)  ──→  ~/.local/state/poketokenbar/state.json  ──→  GNOME Shell 확장
                      ←──  $XDG_RUNTIME_DIR/poketokenbar/commands/  ←──
 ```
 
-Plain files, not D-Bus. The daemon knows nothing about the UI, which is what
-made a second front end possible at all — and what makes a third one easy.
+D-Bus가 아니라 그냥 파일입니다. 데몬은 UI를 전혀 모릅니다 — 애초에 두 번째 프론트엔드가 가능했던
+이유이고, 세 번째도 쉬운 이유입니다.
 
-## Install
+## 설치
 
-Requirements: GNOME Shell 45+, Python 3.12+, `libnotify` for notifications
-(optional), `python-orjson` for faster parsing (optional).
+준비물: GNOME Shell 45+, Python 3.12+, 알림용 `libnotify`(선택), 파싱 가속용
+`python-orjson`(선택).
 
 ```bash
 git clone https://github.com/HUHGEON/poketokenbar-gnome.git
@@ -91,66 +106,68 @@ cd poketokenbar-gnome
 systemctl --user enable --now poketokend
 ```
 
-Then enable **PokeTokenBar** in the Extensions app.
-
-## Differences from the Plasma port
-
-This started as a fork of the Plasma port and diverged in three ways.
-
-**Ten more providers.** The Plasma port reads Claude Code and Codex; its author
-had no data for the rest. The upstream Swift test suite turns out to carry the
-schemas and sample records for most of them, so the parsers were ported
-alongside their test cases and are verified without owning the tools.
-
-**Three defects fixed in the shared core.** Codex reported zero for the week and
-month, because it reimplemented the daily aggregation and never grew the period
-one. Token parsing accepted `int` only, so a corrupt `1e30` became 0 and erased
-a day rather than clamping. The provider registry built cacheless instances that
-nothing used, while the daemon named its two providers by hand.
-
-**Features the Plasma port left out:** per-provider extra scan folders, the
-per-model breakdown of a day, French, Portuguese and German, and pinning a
-caught species to the panel.
-
-## Development
+그다음 확장 앱에서 **PokeTokenBar**를 켜면 됩니다.
 
 ```bash
-python -m pytest -q       # no network, and none of the twelve tools installed
+gnome-extensions enable poketokenbar@huhgeon.github.io
 ```
 
-The tests are the specification. Where a parser rule looks arbitrary, its test
-says which upstream case pinned it and what went wrong without it.
+Xorg에서는 `Alt`+`F2` → `r`로 셸을 다시 불러오고, Wayland에서는 로그아웃 후 다시 로그인하세요.
 
-[docs/TESTING.md](docs/TESTING.md) records exactly what is checked and what is
-not — including the defects the checks have caught, so the claim that they earn
-their keep is checkable rather than asserted.
+## Plasma 포트와 달라진 점
 
-## Credits
+Plasma 포트를 포크해서 세 방향으로 갈라졌습니다.
 
-- [chattymin/PokeTokenBar](https://github.com/chattymin/PokeTokenBar) — the
-  original macOS app, and the source of every parsing rule here.
+**프로바이더 10개 추가.** Plasma 포트는 Claude Code와 Codex만 읽습니다 — 작성자가 나머지는
+검증할 데이터가 없었기 때문입니다. 그런데 원본 Swift 테스트 스위트가 대부분의 스키마와 샘플
+레코드를 들고 있어서, 파서를 테스트 케이스와 함께 옮겼습니다. 그 도구를 쓰지 않아도 검증됩니다.
+
+**공용 코어의 결함 3건 수정.**
+
+- Codex가 주·월 합계를 **0으로 보고**하고 있었습니다. 일별 집계를 복제해 놓고 기간 집계는 아예
+  만들지 않아서, Claude만 되고 Codex는 조용히 0이었습니다.
+- 토큰 파싱이 `int`만 받아서, 손상된 `1e30`이 클램프가 아니라 **0이 되어 하루치를 지웠습니다.**
+- 프로바이더 레지스트리가 캐시 없는 인스턴스를 만들어 두고 아무도 안 썼고, 데몬은 프로바이더
+  두 개를 손으로 나열하고 있었습니다.
+
+**Plasma 포트에 없던 기능:** 프로바이더별 추가 스캔 폴더, 모델별 내역, 프랑스어·포르투갈어·독일어,
+대표 포켓몬 고정, 애니메이션 품질.
+
+## 개발
+
+```bash
+python -m pytest -q      # 네트워크 없음, 12개 도구 하나도 설치 안 해도 됨
+node --test tests/js/    # 확장 코드를 실제로 실행하는 테스트
+```
+
+테스트가 곧 명세입니다. 파서 규칙이 임의로 보이는 곳은, 그 테스트가 어떤 원본 케이스가 그것을
+고정했고 없으면 무엇이 깨지는지 적어두었습니다.
+
+무엇이 검증되고 무엇이 안 되는지는 [docs/TESTING.md](docs/TESTING.md)에 정리했습니다 — 그 검사들이
+실제로 잡아낸 결함 목록까지 포함해서, "값을 한다"는 주장이 주장으로 끝나지 않게 했습니다.
+
+## 크레딧
+
+- [chattymin/PokeTokenBar](https://github.com/chattymin/PokeTokenBar) — 원본 macOS 앱이자
+  여기 있는 모든 파싱 규칙의 출처.
 - [rubensanchezrivero/poketokenbar-plasma](https://github.com/rubensanchezrivero/poketokenbar-plasma)
-  — the Python daemon and the UI-agnostic file protocol this builds on.
+  — Python 데몬과, 이 포트가 올라탄 UI 비종속 파일 프로토콜.
 
-## License & disclaimer
+## 라이선스 & 면책
 
-**MIT** — see [LICENSE](LICENSE). MIT applies to this project's own source code
-only, and grants no rights over third-party trademarks, artwork, or data reached
-through the app.
+**MIT** — [LICENSE](LICENSE) 참고. MIT는 이 프로젝트의 **자체 소스 코드에만** 적용되며, 앱을 통해
+접근하는 제3자의 상표·아트워크·데이터에 대한 권리는 부여하지 않습니다.
 
-PokeTokenBar for GNOME is an **unofficial, non-commercial fan project**. It is
-**not affiliated with, endorsed, sponsored, or approved by Nintendo, Game Freak,
-Creatures Inc., or The Pokémon Company.** "Pokémon" and the related names,
-characters and images are trademarks and copyrighted works of their respective
-owners, and this project claims no ownership of or rights in any Pokémon
-intellectual property.
+PokeTokenBar for GNOME은 **비공식·비상업 팬 프로젝트**입니다. **Nintendo, Game Freak,
+Creatures Inc., The Pokémon Company와 제휴·보증·후원·승인 관계가 없습니다.** "포켓몬(Pokémon)"과
+관련 명칭·캐릭터·이미지는 각 권리자의 상표 및 저작물이며, 본 프로젝트는 어떤 포켓몬 지식재산에
+대해서도 소유권이나 권리를 주장하지 않습니다.
 
-- **No Pokémon assets are included in this repository or in any release.**
-  Species data and sprites are fetched at **runtime** from the public
-  [PokéAPI](https://pokeapi.co) and cached locally on your own machine; rights in
-  the sprite images served through PokéAPI belong to their respective owners.
-- This app is provided free of charge for **personal, non-commercial use only**.
-- If you hold rights and have concerns about this project, please open an issue
-  or contact the maintainer and it will be addressed promptly.
+- **이 저장소와 모든 릴리스에는 포켓몬 에셋이 포함되지 않습니다.** 종 데이터와 스프라이트는 공개
+  [PokéAPI](https://pokeapi.co)에서 **런타임에** 받아 사용자 기기에 로컬 캐시되며, PokéAPI를 통해
+  제공되는 스프라이트 이미지의 권리는 각 권리자에게 있습니다.
+- 본 앱은 **개인적·비상업적 용도로만** 무료 제공됩니다.
+- 권리자께서 본 프로젝트에 대해 우려가 있으시면 이슈를 열거나 메인테이너에게 연락 주시면 신속히
+  대응하겠습니다.
 
-*Provided "as is", without warranty of any kind. This notice is not legal advice.*
+*본 프로젝트는 어떠한 보증도 없이 "있는 그대로" 제공됩니다. 본 고지는 법률 자문이 아닙니다.*
