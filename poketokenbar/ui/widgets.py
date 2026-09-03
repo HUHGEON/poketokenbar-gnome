@@ -7,7 +7,7 @@ files and it does the rest.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QMovie, QPixmap
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget,
@@ -27,6 +27,60 @@ def level_colour(level: str | None) -> str:
     return LEVEL_COLOURS.get(level or "ok", LEVEL_COLOURS["ok"])
 
 
+# Frame-duration floors in seconds, so a larger number is fewer frames per
+# second. Mirrors the GNOME front end's framecap.js and the macOS app's
+# AnimationQuality — a frame costs a redraw wherever it is drawn, and these are
+# the two always-visible surfaces.
+#
+# None of them is 0: an animation running at native rate keeps the machine
+# awake, which is why "saver" is also the default.
+FRAME_FLOORS = {"saver": 0.4, "balanced": 0.2, "smooth": 0.1}
+DEFAULT_QUALITY = "saver"
+
+
+def frame_floor(quality: str | None) -> float:
+    return FRAME_FLOORS.get(quality or "", FRAME_FLOORS[DEFAULT_QUALITY])
+
+
+def quality_of(config: dict | None) -> str:
+    return (config or {}).get("animation_quality") or DEFAULT_QUALITY
+
+
+def decimate(delays: list[float], floor: float) -> list[tuple[int, float]]:
+    """Thin frames so none is shown for less than `floor`, keeping the speed.
+
+    Returns (frame index, hold in seconds). The rule is the one a plausible
+    implementation gets wrong: **drop frames, never stretch them.** Raising each
+    frame's own delay to the floor keeps all of them and lengthens the loop —
+    upstream measured a 55-frame, 2.75s Gen-V sprite becoming a 22s loop at a
+    0.4s floor, an eighth of the intended speed.
+    """
+    if floor <= 0 or len(delays) <= 1:
+        return [(index, delay) for index, delay in enumerate(delays)]
+
+    out: list[tuple[int, float]] = []
+    held: int | None = None
+    accumulated = 0.0
+    for index, delay in enumerate(delays):
+        if held is None:
+            held = index
+        accumulated += delay
+        # The epsilon keeps floating-point accumulation from pushing an interval
+        # one frame further than it should.
+        if accumulated + 1e-9 >= floor:
+            out.append((held, accumulated))
+            held = None
+            accumulated = 0.0
+    # A short tail is merged into the previous frame rather than emitted on its
+    # own, so one loop still lasts exactly as long as the source did.
+    if held is not None and accumulated > 0:
+        if out:
+            out[-1] = (out[-1][0], out[-1][1] + accumulated)
+        else:
+            out.append((held, accumulated))
+    return out
+
+
 class Sprite(QLabel):
     """An animated sprite.
 
@@ -40,6 +94,12 @@ class Sprite(QLabel):
         self._size = size
         self._path: str | None = None
         self._movie: QMovie | None = None
+        self._quality = DEFAULT_QUALITY
+        self._schedule: list[tuple[int, float]] = []
+        self._step = 0
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._advance)
         self.setAlignment(Qt.AlignCenter)
         self.setFixedSize(size, size)
 
@@ -61,7 +121,7 @@ class Sprite(QLabel):
             movie.setScaledSize(QSize(self._size, self._size))
             self._movie = movie
             self.setMovie(movie)
-            movie.start()
+            self._rebuild_schedule()
             return
 
         # A still PNG, or a GIF Qt could not read. Either way one frame beats
@@ -73,6 +133,17 @@ class Sprite(QLabel):
         self.setPixmap(pixmap.scaled(
             self._size, self._size, Qt.KeepAspectRatio, Qt.FastTransformation))
 
+    def set_quality(self, quality: str) -> None:
+        """Change how smoothly this sprite animates.
+
+        Re-times the frames already loaded rather than reopening the file: the
+        pixels have not changed, only how many of them get drawn.
+        """
+        if quality == self._quality:
+            return
+        self._quality = quality
+        self._rebuild_schedule()
+
     def set_paused(self, paused: bool) -> None:
         """Stop animating without discarding the movie.
 
@@ -81,7 +152,50 @@ class Sprite(QLabel):
         """
         if self._movie is None:
             return
-        self._movie.setPaused(paused)
+        if paused:
+            self._timer.stop()
+            self._movie.setPaused(True)
+        else:
+            self._movie.setPaused(False)
+            self._rebuild_schedule()
+
+    def _rebuild_schedule(self) -> None:
+        """Work out which frames to show, and for how long.
+
+        QMovie plays a GIF at its own rate, which is correct but is also every
+        frame. Driving it by hand is what allows the rate to come down without
+        the loop getting longer — `setSpeed` would do the opposite.
+        """
+        self._timer.stop()
+        movie = self._movie
+        if movie is None:
+            return
+        count = movie.frameCount()
+        if count <= 1:
+            movie.jumpToFrame(0)
+            return
+
+        delays = []
+        for index in range(count):
+            movie.jumpToFrame(index)
+            # Milliseconds on the wire, seconds here.
+            delays.append(max(0.02, movie.nextFrameDelay() / 1000))
+        self._schedule = decimate(delays, frame_floor(self._quality))
+        self._step = 0
+        self._show_step()
+
+    def _show_step(self) -> None:
+        if not self._schedule or self._movie is None:
+            return
+        index, hold = self._schedule[self._step]
+        self._movie.jumpToFrame(index)
+        self._timer.start(max(20, round(hold * 1000)))
+
+    def _advance(self) -> None:
+        if not self._schedule:
+            return
+        self._step = (self._step + 1) % len(self._schedule)
+        self._show_step()
 
 
 def label(text: str = "", *, dim: bool = False, bold: bool = False,

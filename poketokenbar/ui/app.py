@@ -19,12 +19,13 @@ from PySide6.QtWidgets import (
     QApplication, QMenu, QSystemTrayIcon, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from .. import commands
+from .. import commands, config
+from .pet import DesktopPet
 from .panels import (
     BagPanel, CollectionPanel, HomePanel, SettingsPanel, ShopPanel, ago,
 )
 from .reader import StateReader
-from .widgets import label
+from .widgets import label, quality_of
 
 # The window is a fixed width so the Pokedex grid never reflows mid-browse.
 WINDOW_SIZE = (420, 620)
@@ -111,6 +112,9 @@ class TrayApp:
         self._sprite_path: str | None = None
         self._movie: QMovie | None = None
 
+        # Created only when the setting is on, and destroyed when it goes off.
+        self.pet: DesktopPet | None = None
+
         self.tray = QSystemTrayIcon()
         self.tray.setIcon(self._fallback_icon())
         self.tray.setContextMenu(self._menu())
@@ -131,12 +135,37 @@ class TrayApp:
         menu.addAction(refresh)
 
         menu.addSeparator()
+        # The daemon has handled these all along; without a control they were
+        # reachable only from poketokenctl, which is not where anyone would look
+        # for "move my Pokedex to another machine".
+        export = QAction("Export save", menu)
+        export.triggered.connect(
+            lambda: commands.enqueue("export", {"path": str(self.save_path())}))
+        menu.addAction(export)
+
+        import_action = QAction("Import save", menu)
+        import_action.triggered.connect(
+            lambda: commands.enqueue("import", {"path": str(self.save_path())}))
+        menu.addAction(import_action)
+
+        menu.addSeparator()
         quit_action = QAction("Quit", menu)
         # Quits this window only. The daemon is a separate process and keeps
         # counting — closing the view must not lose someone's progress.
         quit_action.triggered.connect(self.app.quit)
         menu.addAction(quit_action)
         return menu
+
+    def save_path(self):
+        """Where a save is written to and read from.
+
+        A fixed, predictable path rather than a file dialog: the export is
+        triggered from a tray menu, and a modal file chooser from there is more
+        ceremony than moving a Pokedex is worth.
+        """
+        from pathlib import Path
+
+        return Path.home() / "poketokenbar-save.json"
 
     def _fallback_icon(self) -> QIcon:
         """A blank icon, so the tray entry exists before the first sprite.
@@ -156,8 +185,44 @@ class TrayApp:
     def poll(self) -> None:
         state = self.reader.read()
         self._update_tray(state)
+        self._sync_pet(state)
         if self.window.isVisible():
             self.window.refresh(state)
+
+    def _sync_pet(self, state: dict | None) -> None:
+        """Create, update or remove the pet to match the daemon's settings.
+
+        Removed rather than hidden when it is switched off: a hidden always-on-
+        top window still exists, and the setting is meant to mean "not there".
+        """
+        wanted = bool(((state or {}).get("config") or {}).get("floating_pet_enabled"))
+        if not wanted:
+            if self.pet is not None:
+                self.pet.close()
+                self.pet = None
+            return
+
+        if self.pet is None:
+            self.pet = DesktopPet(
+                on_activate=self.toggle_window,
+                on_moved=self._remember_pet_position,
+            )
+            config_values = (state or {}).get("config") or {}
+            self.pet.update_state(state)
+            self.pet.place(
+                int(config_values.get("floating_pet_x") or 80),
+                int(config_values.get("floating_pet_y") or 80),
+            )
+            self.pet.show()
+        else:
+            self.pet.update_state(state)
+
+    def _remember_pet_position(self, x: int, y: int) -> None:
+        # Through the daemon's own config, so the pet comes back where it was
+        # left — including after a reboot.
+        config.set_value(config.default_path(), "floating_pet_x", str(x))
+        config.set_value(config.default_path(), "floating_pet_y", str(y))
+        commands.enqueue("reload_config", {})
 
     def _update_tray(self, state: dict | None) -> None:
         panel = (state or {}).get("panel") or {}
@@ -168,6 +233,11 @@ class TrayApp:
             self._sprite_path = path
             self._set_icon(path)
         self.tray.setToolTip(self._tooltip(state))
+
+    def _apply_quality(self, state: dict | None) -> None:
+        quality = quality_of((state or {}).get("config"))
+        if self.pet is not None:
+            self.pet.sprite.set_quality(quality)
 
     def _set_icon(self, path: str | None) -> None:
         if not path:

@@ -12,6 +12,7 @@ before the daemon has ever written a file, and a front end that raises on
 """
 
 import os
+import sys
 
 import pytest
 
@@ -20,7 +21,27 @@ pytest.importorskip("PySide6", reason="the Qt front end is optional")
 # Must be set before QApplication exists, and QApplication is process-wide.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
+
+# Parked on `sys`, not in a module global or a fixture.
+#
+# Qt segfaults if the QApplication is destroyed while widgets and their timers
+# are still alive, and at interpreter shutdown module globals are cleared in an
+# order nothing here controls. `sys` outlives them, so the application is the
+# last thing to go. The crash this avoids happens after every test has passed,
+# which makes it invisible in the report and fatal to the exit code.
+#
+# The widgets are parked with it for the same reason: a TrayApp created in a
+# test is not destroyed by the test, and Qt has to see them go first.
+_APPLICATION = QApplication.instance() or QApplication([])
+sys._poketokenbar_qt = (_APPLICATION, [])
+
+
+def keep(widget):
+    """Hold a Qt object for the life of the process. See above."""
+    sys._poketokenbar_qt[1].append(widget)
+    return widget
 
 from poketokenbar.ui import panels  # noqa: E402
 from poketokenbar.ui.app import TrayApp, Window  # noqa: E402
@@ -30,11 +51,10 @@ from poketokenbar.ui.widgets import Sprite, level_colour, meter  # noqa: E402
 from test_extension_contract import full_payload  # noqa: E402
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def qt_app():
-    """One QApplication for the module; Qt allows exactly one per process."""
-    application = QApplication.instance() or QApplication([])
-    yield application
+    """The one QApplication; Qt allows exactly one per process."""
+    return _APPLICATION
 
 
 @pytest.fixture(scope="module")
@@ -57,7 +77,7 @@ PANEL_NAMES = ("home", "shop", "bag", "collection", "settings")
 
 @pytest.mark.parametrize("name", PANEL_NAMES)
 def test_every_panel_renders_a_full_payload(qt_app, reader, payload, name):
-    window = Window(reader)
+    window = keep(Window(reader))
     panel = window.panels[name]
     panel.update(payload)
     assert panel.layout_.count() > 0, f"{name} produced no widgets"
@@ -68,7 +88,7 @@ def test_every_panel_survives_an_empty_state(qt_app, name):
     """The state before the daemon has ever run, which is what a fresh install
     sees. A front end that raises here never shows anything at all."""
     empty = StateReader()
-    window = Window(empty)
+    window = keep(Window(empty))
     window.panels[name].update(None)
     window.panels[name].update({})
 
@@ -77,7 +97,7 @@ def test_every_panel_survives_an_empty_state(qt_app, name):
 def test_updating_twice_does_not_double_the_contents(qt_app, reader, payload, name):
     """A widget removed from a layout is still parented and still painted until
     Qt collects it, so a rebuild without an explicit delete shows both."""
-    window = Window(reader)
+    window = keep(Window(reader))
     panel = window.panels[name]
     panel.update(payload)
     first = panel.layout_.count()
@@ -102,7 +122,7 @@ def test_home_shows_the_companion_not_the_pinned_species(qt_app, payload):
     )
     subject = StateReader()
     subject.state = pinned
-    window = Window(subject)
+    window = keep(Window(subject))
     window.panels["home"].update(pinned)
     assert window.panels["home"].sprite._path == "/cache/5-a.gif"
 
@@ -111,7 +131,7 @@ def test_home_shows_the_companion_not_the_pinned_species(qt_app, payload):
 
 
 def test_the_footer_reports_freshness(qt_app, reader, payload):
-    window = Window(reader)
+    window = keep(Window(reader))
     window.refresh(payload)
     assert "Updated" in window.footer.text()
 
@@ -119,7 +139,7 @@ def test_the_footer_reports_freshness(qt_app, reader, payload):
 def test_the_footer_reports_daemon_errors_before_freshness(qt_app, payload):
     subject = StateReader()
     subject.state = dict(payload, errors=["claude_code: boom"])
-    window = Window(subject)
+    window = keep(Window(subject))
     window.refresh(subject.state)
     assert "boom" in window.footer.text()
 
@@ -127,14 +147,14 @@ def test_the_footer_reports_daemon_errors_before_freshness(qt_app, payload):
 def test_the_footer_reports_a_stale_daemon(qt_app, payload):
     subject = StateReader()
     subject.state = dict(payload, updated_at=1.0)  # 1970
-    window = Window(subject)
+    window = keep(Window(subject))
     window.refresh(subject.state)
     assert window.footer.text() == subject.text("stale_warning")
 
 
 def test_only_the_visible_tab_is_rebuilt(qt_app, reader, payload):
     """The others would throw their children away again before anyone saw them."""
-    window = Window(reader)
+    window = keep(Window(reader))
     window.tabs.setCurrentIndex(0)
     window.refresh(payload)
     assert window.panels["home"].layout_.count() > 0
@@ -147,12 +167,12 @@ def test_only_the_visible_tab_is_rebuilt(qt_app, reader, payload):
 def test_the_tray_has_an_icon_before_the_first_sprite(qt_app):
     """Without one the tray entry is invisible and there is no way to open the
     window, which looks exactly like a crash."""
-    tray = TrayApp(qt_app, StateReader())
+    tray = keep(TrayApp(qt_app, StateReader()))
     assert not tray.tray.icon().isNull()
 
 
 def test_the_tooltip_carries_the_panel_numbers(qt_app, reader, payload):
-    tray = TrayApp(qt_app, reader)
+    tray = keep(TrayApp(qt_app, reader))
     tray._update_tray(payload)
     tooltip = tray.tray.toolTip()
     assert payload["panel"]["tokens_text"] in tooltip
@@ -161,13 +181,13 @@ def test_the_tooltip_carries_the_panel_numbers(qt_app, reader, payload):
 
 
 def test_the_tooltip_falls_back_to_the_app_name(qt_app):
-    tray = TrayApp(qt_app, StateReader())
+    tray = keep(TrayApp(qt_app, StateReader()))
     tray._update_tray(None)
     assert tray.tray.toolTip() == "PokeTokenBar"
 
 
 def test_the_tray_menu_offers_open_refresh_and_quit(qt_app):
-    tray = TrayApp(qt_app, StateReader())
+    tray = keep(TrayApp(qt_app, StateReader()))
     labels = [action.text() for action in tray.tray.contextMenu().actions()]
     assert labels[0] == "Open"
     assert "Refresh" in labels
@@ -177,7 +197,7 @@ def test_the_tray_menu_offers_open_refresh_and_quit(qt_app):
 def test_polling_an_absent_state_file_does_not_raise(qt_app, tmp_path):
     """The normal state right after install."""
     subject = StateReader(path=tmp_path / "absent.json")
-    tray = TrayApp(qt_app, subject)
+    tray = keep(TrayApp(qt_app, subject))
     tray.poll()
     assert subject.error
 
@@ -188,7 +208,7 @@ def test_polling_an_absent_state_file_does_not_raise(qt_app, tmp_path):
 def test_a_sprite_does_not_rebuild_for_the_same_path(qt_app, tmp_path):
     """Rebuilding the QMovie every poll restarts the animation from frame one,
     so the companion would stutter rather than loop."""
-    sprite = Sprite(32)
+    sprite = keep(Sprite(32))
     sprite.set_path(None)
     assert sprite._path is None
     sprite.set_path(str(tmp_path / "missing.gif"))
@@ -198,7 +218,7 @@ def test_a_sprite_does_not_rebuild_for_the_same_path(qt_app, tmp_path):
 
 
 def test_a_missing_sprite_file_leaves_the_label_blank(qt_app, tmp_path):
-    sprite = Sprite(32)
+    sprite = keep(Sprite(32))
     sprite.set_path(str(tmp_path / "nope.gif"))
     assert sprite.pixmap().isNull()
 
@@ -291,7 +311,7 @@ def test_tab_labels_arrive_with_the_catalogue(qt_app, payload):
     lower case forever, and a language change never reaches them.
     """
     subject = StateReader()
-    window = Window(subject)
+    window = keep(Window(subject))
     assert window.tabs.tabText(0) == "home", "no catalogue yet, so the key stands in"
 
     subject.state = payload
@@ -307,7 +327,7 @@ def test_tab_labels_follow_a_language_change(qt_app, payload):
 
     subject = StateReader()
     subject.state = payload
-    window = Window(subject)
+    window = keep(Window(subject))
     window.refresh(payload)
     english = window.tabs.tabText(0)
 
@@ -321,6 +341,145 @@ def test_the_settings_tab_keeps_its_own_name(qt_app, payload):
     """It is the extension's own word, not one the daemon ships."""
     subject = StateReader()
     subject.state = payload
-    window = Window(subject)
+    window = keep(Window(subject))
     window.refresh(payload)
     assert window.tabs.tabText(window.tabs.count() - 1) == "Settings"
+
+
+# MARK: the desktop pet
+
+
+def pet_state(payload, **config):
+    return dict(payload, config={**payload.get("config", {}), **config})
+
+
+def test_no_pet_until_the_setting_is_on(qt_app, payload):
+    """Three settings for a pet that did not exist was worse than missing it:
+    the switch flipped and nothing happened."""
+    subject = StateReader()
+    tray = keep(TrayApp(qt_app, subject))
+    tray._sync_pet(pet_state(payload, floating_pet_enabled=False))
+    assert tray.pet is None
+
+
+def test_the_pet_appears_and_follows_the_panel(qt_app, payload):
+    subject = StateReader()
+    tray = keep(TrayApp(qt_app, subject))
+    state = pet_state(
+        payload, floating_pet_enabled=True, floating_pet_size=120,
+        floating_pet_x=200, floating_pet_y=150,
+    )
+    state["panel"] = dict(state["panel"], sprite_path="/cache/3-sha.gif")
+    tray._sync_pet(state)
+    keep(tray.pet)
+
+    assert tray.pet is not None
+    assert tray.pet.width() == 120
+    # It shows whatever the panel shows, so a pinned species appears here too.
+    assert tray.pet.sprite._path == "/cache/3-sha.gif"
+
+
+def test_turning_the_pet_off_removes_it(qt_app, payload):
+    """Removed rather than hidden: a hidden always-on-top window still exists,
+    and the setting is meant to mean "not there"."""
+    subject = StateReader()
+    tray = keep(TrayApp(qt_app, subject))
+    tray._sync_pet(pet_state(payload, floating_pet_enabled=True))
+    assert tray.pet is not None
+    tray._sync_pet(pet_state(payload, floating_pet_enabled=False))
+    assert tray.pet is None
+
+
+def test_the_pet_is_frameless_and_stays_on_top(qt_app):
+    from poketokenbar.ui.pet import DesktopPet
+
+    pet = keep(DesktopPet())
+    flags = pet.windowFlags()
+    assert flags & Qt.FramelessWindowHint
+    assert flags & Qt.WindowStaysOnTopHint
+    # An ornament, not a window to switch to.
+    assert flags & Qt.Tool
+
+
+def test_the_pet_clamps_to_the_screen(qt_app):
+    """A position saved on a monitor that is gone would leave it invisible with
+    no way to get it back."""
+    from poketokenbar.ui.pet import DesktopPet
+
+    pet = keep(DesktopPet())
+    pet.place(-10_000, -10_000)
+    assert pet.x() >= -1 and pet.y() >= -1
+    pet.place(10_000_000, 10_000_000)
+    assert pet.x() < 10_000_000
+
+
+# MARK: animation quality
+
+
+def test_the_frame_cap_keeps_the_loop_length(qt_app):
+    """The rule a plausible implementation gets wrong: drop frames, never
+    stretch them. Raising each to the floor keeps all 55 and turns a 2.75s loop
+    into 22s."""
+    from poketokenbar.ui.widgets import decimate
+
+    delays = [0.05] * 55
+    capped = decimate(delays, 0.4)
+    assert abs(sum(hold for _index, hold in capped) - sum(delays)) < 1e-9
+    assert len(capped) < len(delays)
+    assert capped[0][0] == 0 and capped[1][0] == 8
+
+
+def test_the_frame_cap_merges_a_short_tail(qt_app):
+    from poketokenbar.ui.widgets import decimate
+
+    capped = decimate([0.05, 0.05, 0.05], 0.1)
+    assert len(capped) == 1
+    assert abs(capped[0][1] - 0.15) < 1e-9
+
+
+def test_no_quality_preset_disables_the_cap(qt_app):
+    """Native frame rate keeps the machine awake, which is why "saver" is also
+    the default."""
+    from poketokenbar.ui.widgets import DEFAULT_QUALITY, FRAME_FLOORS, frame_floor
+
+    assert all(floor > 0 for floor in FRAME_FLOORS.values())
+    assert frame_floor(DEFAULT_QUALITY) == max(FRAME_FLOORS.values())
+    assert frame_floor("nonsense") == FRAME_FLOORS[DEFAULT_QUALITY]
+
+
+def test_the_two_front_ends_agree_on_the_presets():
+    """A frame costs a redraw wherever it is drawn, and both front ends offer
+    the same three names — they must mean the same rates."""
+    import json
+    import re
+    from pathlib import Path
+
+    from poketokenbar.ui.widgets import FRAME_FLOORS
+
+    source = (
+        Path(__file__).resolve().parent.parent
+        / "gnome-extension" / "poketokenbar@huhgeon.github.io" / "lib" / "framecap.js"
+    ).read_text(encoding="utf-8")
+    block = re.search(r"FRAME_FLOORS = \{(.*?)\}", source, re.S).group(1)
+    js = dict(
+        (name, float(value))
+        for name, value in re.findall(r"(\w+):\s*([\d.]+)", block)
+    )
+    assert js == FRAME_FLOORS
+
+
+# MARK: save transfer
+
+
+def test_the_tray_menu_offers_save_transfer(qt_app):
+    """Handled by the daemon all along, and reachable only from poketokenctl —
+    which is not where anyone looks to move their Pokedex."""
+    tray = keep(TrayApp(qt_app, StateReader()))
+    labels = [action.text() for action in tray.tray.contextMenu().actions()]
+    assert "Export save" in labels
+    assert "Import save" in labels
+
+
+def test_the_save_path_is_predictable(qt_app):
+    tray = keep(TrayApp(qt_app, StateReader()))
+    assert tray.save_path().name == "poketokenbar-save.json"
