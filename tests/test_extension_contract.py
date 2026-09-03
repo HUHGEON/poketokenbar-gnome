@@ -81,7 +81,12 @@ def full_payload() -> dict:
             subscription_type="max",
             account={"email": "x@example.com"},
         ),
-        provider_status={"anthropic": {"level": "operational"}},
+        # The real shape from StatusChecker.get(). Healthy providers are
+        # dropped there, so every row that reaches here is an incident.
+        provider_status={
+            "anthropic": {"label": "Major outage", "severity": "crit",
+                          "indicator": "major"},
+        },
         celebration={"kind": "hatch", "title": "t", "detail": "d"},
         settings={"providers": [{"id": "pi", "display_name": "Pi Agent",
                                  "custom_scan_roots": "", "matched_folders": 0}]},
@@ -229,6 +234,9 @@ ROW_ACCESSORS = {
     "limitWindow": "limit_window",
     "panelWindow": "panel_window",
     "providerRow": "settings_provider",
+    "usageRow": "provider_usage",
+    "burnRow": "burn_window",
+    "providerStatus": "provider_status",
     "config": "config",
 }
 
@@ -239,6 +247,12 @@ def row_keys(name: str, payload: dict) -> set[str]:
         return set(payload["today"]["models"][0])
     if name == "limit_window":
         return set(payload["limits"]["session"])
+    if name == "provider_usage":
+        return set(payload["providers"]["claude_code"])
+    if name == "burn_window":
+        return set(payload["burn"]["session"])
+    if name == "provider_status":
+        return set(payload["provider_status"]["anthropic"])
     if name == "settings_provider":
         return set(payload["settings"]["providers"][0])
     if name == "config":
@@ -370,3 +384,62 @@ def test_every_settings_toggle_labels_itself_from_the_catalogue(payload):
     strings = set(re.findall(r"""string:\s*['"](\w+)['"]""", source))
     unknown = strings - set(payload["strings"])
     assert not unknown, f"toggle labels with no catalogue entry: {sorted(unknown)}"
+
+
+# MARK: the check that keeps the checks honest
+
+
+# Names that are not payload data: Shell APIs, JavaScript built-ins, and the
+# extension's own locals. Anything else holding snake_case fields is a payload
+# access and has to be declared above.
+_NOT_PAYLOAD = {
+    # imported namespaces and classes
+    "this", "super", "Main", "Clutter", "GObject", "St", "Gio", "GLib", "Cogl",
+    "GdkPixbuf", "Math", "JSON", "Object", "Commands", "Config", "PopupMenu",
+    "PanelMenu", "Extension", "Sprite", "console", "Number", "String", "Array",
+    "Date", "TextDecoder", "TextEncoder",
+    # locals
+    "e", "_e", "path", "file", "temp", "final", "animation", "iter", "pixbuf",
+    "content", "frame", "result", "entry", "widget", "box", "meter", "sprite",
+    "toggle", "tab", "cell", "item", "clickable", "chain", "line", "caption",
+    "spacer", "price", "buy", "banner", "name", "key", "children", "stages",
+    "work", "event", "menu", "section", "reader", "target", "values", "roots",
+    "payload", "obj", "parsed", "metadata", "css", "source", "text", "label",
+    "pattern", "found", "out", "stem", "dir", "connection", "doc", "left",
+    "details", "store", "currentRow", "summary", "buttons",
+    # Top-level access has its own test; repeating it here would only duplicate
+    # the failure message.
+    "state",
+}
+
+# The negative lookahead is what separates data from API: St and Clutter methods
+# are snake_case too (`add_child`, `set_size`), and listing them by name would be
+# a list to maintain forever. A payload field is never called.
+# `(?!\w)` first, or the greedy \w+ backtracks to `add_chil` and satisfies the
+# lookahead on the `d` that follows.
+_ACCESS = re.compile(r"(?<![.\w])([a-zA-Z_]\w*)(?:\?)?\.(\w+)(?!\w)(?!\s*\()")
+
+
+def test_no_payload_access_escapes_the_declared_accessors():
+    """Every snake_case field read must belong to a declared accessor.
+
+    Without this the coverage is only as good as the list, and the list was
+    already short: `burn.forecast_text` sat unchecked and turned out to name a
+    field the daemon never emitted, so the burn forecast simply never appeared.
+
+    A new block therefore has to be added to BLOCK_ACCESSORS or ROW_ACCESSORS
+    before its fields can be read at all — which is the point.
+    """
+    declared = set(BLOCK_ACCESSORS) | set(ROW_ACCESSORS)
+    escaped: dict[str, list[str]] = {}
+    for code in source_code(strip_strings=True):
+        for variable, field in _ACCESS.findall(code):
+            if variable in declared or variable in _NOT_PAYLOAD or variable[0].isupper():
+                continue
+            if "_" not in field:
+                continue  # a method or a plain property, not a payload field
+            escaped.setdefault(variable, []).append(field)
+    assert not escaped, (
+        "these read payload-shaped fields but are not declared accessors: "
+        + str({k: sorted(set(v)) for k, v in escaped.items()})
+    )

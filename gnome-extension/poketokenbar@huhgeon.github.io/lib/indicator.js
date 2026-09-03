@@ -6,6 +6,7 @@
  */
 
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
@@ -18,7 +19,7 @@ import {Sprite} from './sprite.js';
 import {
     BagSection, CollectionSection, HomeSection, SettingsSection, ShopSection,
 } from './sections.js';
-import {button, label, levelClass, row} from './widgets.js';
+import {ago, button, label, levelClass, row} from './widgets.js';
 
 // The popup is a fixed width so the Pokedex grid never reflows mid-browse.
 const POPUP_WIDTH = 380;
@@ -83,6 +84,11 @@ class Indicator extends PanelMenu.Button {
         content.add_child(row([
             button('↻', () => Commands.refresh()),
             new St.Widget({x_expand: true}),
+            // The daemon has handled these all along; without a control they
+            // were reachable only from poketokenctl, which is not where anyone
+            // would look for "move my Pokedex to another machine".
+            button('Export', () => Commands.exportSave(this._savePath())),
+            button('Import', () => Commands.importSave(this._savePath())),
         ], 'poketokenbar-actions'));
 
         item.add_child(content);
@@ -130,6 +136,18 @@ class Indicator extends PanelMenu.Button {
         for (const [key, section] of Object.entries(this._sections))
             section.visible = key === name;
         this._render();
+    }
+
+    /** Where a save is written to and read from.
+     *
+     * A fixed, predictable path rather than a file chooser: an extension has no
+     * portal-backed dialog available to it, and inventing one would be more
+     * surface than the feature is worth.
+     */
+    _savePath() {
+        return GLib.build_filenamev([
+            GLib.get_home_dir(), 'poketokenbar-save.json',
+        ]);
     }
 
     /** Paint everything from the latest snapshot. */
@@ -189,7 +207,18 @@ class Indicator extends PanelMenu.Button {
             return;
         }
         const errors = state?.errors ?? [];
-        this._footer.text = errors.length > 0 ? errors.join(', ') : '';
+        if (errors.length > 0) {
+            this._footer.text = errors.join(', ');
+            return;
+        }
+        // Freshness, so a working daemon looks different from a stopped one
+        // before the ten-minute staleness threshold is anywhere near.
+        if (state?.scanning) {
+            this._footer.text = 'scanning…';
+            return;
+        }
+        const age = this._reader.ageSeconds();
+        this._footer.text = age === null ? '' : `Updated ${ago(age)}`;
     }
 
     /** Pause every sprite in the extension — used while the session is locked. */

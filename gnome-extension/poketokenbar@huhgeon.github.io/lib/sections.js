@@ -18,7 +18,8 @@ import * as Config from './config.js';
 import {LANGUAGES} from './languages.js';
 import {Sprite} from './sprite.js';
 import {
-    Meter, button, column, heading, label, levelClass, placeholder, row, statLine,
+    Meter, ago, badge, button, column, heading, label, levelClass, placeholder,
+    resetsIn, row, statLine,
 } from './widgets.js';
 
 /** Base: a vertical box that empties itself before each update. */
@@ -119,12 +120,25 @@ class HomeSection extends Section {
         }
 
         // --- per provider ---------------------------------------------------
+        // Only when more than one tool is in use: a single-provider day would
+        // just restate the total on a second line.
         const providers = state?.providers ?? {};
         const ids = Object.keys(providers);
         if (ids.length > 1) {
-            for (const id of ids)
-                this.add_child(statLine(id, providers[id].total_tokens_text));
+            for (const id of ids) {
+                // Named apart from the settings page's providerRow: both are
+                // "a provider", and they are not the same shape.
+                const usageRow = providers[id];
+                this.add_child(statLine(id, usageRow.total_tokens_text));
+                this.add_child(label(
+                    `in ${usageRow.input_tokens} · out ${usageRow.output_tokens}` +
+                    ` · cache w ${usageRow.cache_creation_tokens}` +
+                    ` · r ${usageRow.cache_read_tokens}`,
+                    'poketokenbar-subtle'));
+            }
         }
+
+        this._addProviderStatus(state);
 
         // --- official limits -------------------------------------------------
         this._addLimits(state);
@@ -143,13 +157,47 @@ class HomeSection extends Section {
         return line;
     }
 
+    _addProviderStatus(state) {
+        // Every row here is already a problem: the daemon drops the healthy
+        // ones, and an unreachable status page is left out rather than
+        // reported as an outage. So there is nothing to filter — a row means
+        // something is wrong, and that is the one thing that explains a number
+        // looking off.
+        const statuses = state?.provider_status ?? {};
+        for (const id of Object.keys(statuses)) {
+            const providerStatus = statuses[id];
+            if (!providerStatus)
+                continue;
+            this.add_child(row([
+                badge(id),
+                new St.Widget({x_expand: true}),
+                label(providerStatus.label ?? '',
+                    `poketokenbar-value ${levelClass(providerStatus.severity)}`),
+            ]));
+        }
+    }
+
     _addLimits(state) {
         const t = key => this._reader.text(key);
         const limits = state?.limits;
         if (!limits || (!limits.session && !limits.weekly))
             return;
 
-        this.add_child(heading(t('limits_official')));
+        // The plan is worth naming: the same percentage means a different
+        // number of tokens on Pro and on Max.
+        this.add_child(heading(limits.plan
+            ? `${t('limits_official')} · ${String(limits.plan).toUpperCase()}`
+            : t('limits_official')));
+
+        // Which account these are for. Someone signed into two is otherwise
+        // reading a bar that belongs to the other one.
+        const account = limits.account ?? {};
+        const who = account.email || account.name;
+        if (who) {
+            this.add_child(label(
+                account.organization ? `${who} · ${account.organization}` : who,
+                'poketokenbar-subtle'));
+        }
         for (const [key, name] of [['session', 'five_hour_session'], ['weekly', 'weekly']]) {
             const limitWindow = limits[key];
             if (!limitWindow)
@@ -160,13 +208,18 @@ class HomeSection extends Section {
             const meter = new Meter();
             meter.setFraction(percent / 100, limitWindow.severity);
             this.add_child(meter);
-            if (limitWindow.resets_at)
-                this.add_child(label(limitWindow.resets_at, 'poketokenbar-subtle'));
-        }
+            const resets = resetsIn(limitWindow.resets_at, t);
+            if (resets)
+                this.add_child(label(resets, 'poketokenbar-subtle'));
 
-        const burn = state?.burn;
-        if (burn?.forecast_text)
-            this.add_child(label(burn.forecast_text, 'poketokenbar-subtle'));
+            // The forecast belongs to the window it is a forecast for.
+            const burnRow = state?.burn?.[key];
+            if (burnRow?.eta_text) {
+                this.add_child(label(
+                    t('at_this_rate').replace('%1', burnRow.eta_text),
+                    'poketokenbar-subtle'));
+            }
+        }
     }
 });
 
@@ -195,12 +248,23 @@ class ShopSection extends Section {
             ]);
             const spacer = new St.Widget({x_expand: true});
             const price = label(shopItem.price_text ?? '', 'poketokenbar-value');
-            // Disabled rather than hidden while unaffordable: a card that
-            // vanishes reads as a bug, and the price is the point of the row.
-            const buy = button(t('buy'), () => Commands.buy(shopItem.key));
-            buy.reactive = Boolean(shopItem.affordable);
-            buy.opacity = shopItem.affordable ? 255 : 120;
-            this.add_child(row([left, spacer, price, buy], 'poketokenbar-card'));
+            const children = [left, spacer];
+            if (shopItem.owned_count > 0)
+                children.push(badge(`${t('owned')} x${shopItem.owned_count}`));
+            children.push(price);
+            if (shopItem.owned) {
+                // A one-off that is already held: showing a live Buy button
+                // would offer a purchase the daemon refuses.
+                children.push(label(t('owned'), 'poketokenbar-value'));
+            } else {
+                const buy = button(t('buy'), () => Commands.buy(shopItem.key));
+                // Disabled rather than hidden while unaffordable: a card that
+                // vanishes reads as a bug, and the price is the point of the row.
+                buy.reactive = Boolean(shopItem.affordable);
+                buy.opacity = shopItem.affordable ? 255 : 120;
+                children.push(buy);
+            }
+            this.add_child(row(children, 'poketokenbar-card'));
         }
     }
 });
@@ -281,6 +345,7 @@ class CollectionSection extends Section {
             return;
         }
 
+        this.add_child(label(`${entries.length} species`, 'poketokenbar-subtle'));
         const counts = state?.rarity_counts ?? {};
         const summary = ['legendary', 'rare', 'uncommon', 'common']
             .filter(key => counts[key])
@@ -324,12 +389,19 @@ class CollectionSection extends Section {
     }
 
     _dexCell(dexEntry) {
+        const t = key => this._reader.text(key);
         const sprite = new Sprite({size: 40});
         sprite.setPath(dexEntry.sprite_path || null);
         const caption = label(
             dexEntry.is_shiny ? `✨${dexEntry.species_id}` : `#${dexEntry.species_id}`,
             'poketokenbar-dexnum');
-        const cell = column([sprite, caption], 'poketokenbar-dexcell');
+        const parts = [sprite, caption];
+        // The one being raised right now appears in the Pokedex before it
+        // graduates, and without the badge it is indistinguishable from a
+        // finished catch.
+        if (dexEntry.is_raising)
+            parts.push(badge(t('raising'), 'poketokenbar-badge-small'));
+        const cell = column(parts, 'poketokenbar-dexcell');
 
         // Tapping a cell pins that species to the panel. The daemon refuses a
         // species the save does not own, so this cannot pin a ghost.
@@ -349,6 +421,15 @@ class CollectionSection extends Section {
             this.add_child(placeholder(t('no_pokemon_yet')));
             return;
         }
+        this.add_child(label(`${log.length} total`, 'poketokenbar-subtle'));
+        const catchCounts = state?.catch_counts ?? {};
+        const catchSummary = ['legendary', 'rare', 'uncommon', 'common']
+            .filter(key => catchCounts[key])
+            .map(key => `${t(key)} ${catchCounts[key]}`)
+            .join('  ');
+        if (catchSummary)
+            this.add_child(label(catchSummary, 'poketokenbar-subtle'));
+
         for (const catchRecord of log.slice(0, 40)) {
             const chain = row([], 'poketokenbar-chain');
             // The chain's last stage is what it graduated as; catch_log rows
@@ -362,9 +443,16 @@ class CollectionSection extends Section {
             const finalName = stages.length > 0
                 ? (stages[stages.length - 1].name || `#${stages[stages.length - 1].species_id}`)
                 : '';
-            const details = column([
+            // Not named `heading`: that is an imported helper, and shadowing it
+            // here would break the next person who reaches for it in this method.
+            const nameRow = row([
                 label(catchRecord.is_shiny ? `✨ ${finalName}` : finalName,
                     'poketokenbar-key'),
+            ]);
+            if (catchRecord.raising)
+                nameRow.add_child(badge(t('raising'), 'poketokenbar-badge-small'));
+            const details = column([
+                nameRow,
                 label(`${t(catchRecord.rarity ?? 'common')} · ${catchRecord.nature ?? ''} · ${
                     catchRecord.raised_text ?? ''}`, 'poketokenbar-subtle'),
             ]);

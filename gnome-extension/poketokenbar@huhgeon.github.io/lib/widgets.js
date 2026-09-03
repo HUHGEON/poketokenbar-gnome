@@ -114,3 +114,43 @@ export function grouped(value) {
     const n = Math.round(value || 0);
     return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
+
+
+/**
+ * "resets in 2h 15m" from an ISO-8601 instant.
+ *
+ * `resets_at` arrives as the raw timestamp the API returned. Rendering it
+ * verbatim puts `2026-09-03T10:00:00Z` under the meter, which is data rather
+ * than an answer to "how long have I got".
+ */
+export function resetsIn(iso, strings) {
+    if (!iso)
+        return '';
+    const remaining = new Date(iso).getTime() - Date.now();
+    if (Number.isNaN(remaining))
+        return '';
+    if (remaining <= 0)
+        return strings('resetting_now');
+    const minutes = Math.floor(remaining / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0)
+        return `${days}d ${hours % 24}h`;
+    if (hours > 0)
+        return `${hours}h ${minutes % 60}m`;
+    return `${minutes}m`;
+}
+
+/** "just now" / "3 min ago" for the footer's freshness line. */
+export function ago(seconds) {
+    if (seconds === null || seconds === undefined)
+        return '';
+    if (seconds < 90)
+        return 'just now';
+    return `${Math.round(seconds / 60)} min ago`;
+}
+
+/** A small pill, for badges like RAISING or a provider incident. */
+export function badge(text, styleClass = 'poketokenbar-badge') {
+    return label(text, styleClass);
+}

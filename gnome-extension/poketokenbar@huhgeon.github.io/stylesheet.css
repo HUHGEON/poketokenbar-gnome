@@ -210,3 +210,21 @@
   border-radius: 6px;
   font-size: 0.85em;
 }
+
+.poketokenbar-badge {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.75em;
+}
+
+.poketokenbar-badge-small {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 0.6em;
+}
+
+.poketokenbar-entry {
+  padding: 4px 6px;
+}
