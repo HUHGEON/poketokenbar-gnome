@@ -115,11 +115,15 @@ caught species to the panel.
 ## Development
 
 ```bash
-python -m pytest          # 538 tests, no network, no tools installed
+python -m pytest -q       # no network, and none of the twelve tools installed
 ```
 
 The tests are the specification. Where a parser rule looks arbitrary, its test
 says which upstream case pinned it and what went wrong without it.
+
+[docs/TESTING.md](docs/TESTING.md) records exactly what is checked and what is
+not — including the defects the checks have caught, so the claim that they earn
+their keep is checkable rather than asserted.
 
 ## Credits
 
