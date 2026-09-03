@@ -23,7 +23,13 @@ What it has caught so far:
 - `floating_pet_x/y` having no daemon default, so `config.load` dropped them and
   the pet would have jumped home on every restart;
 - the panel sprite reading the companion's path rather than the pinned one,
-  which left pinning with nowhere to take effect at all.
+  which left pinning with nowhere to take effect at all;
+- `burn.forecast_text`, which the daemon never emits — the burn forecast simply
+  never appeared. It was in a blind spot: coverage was a hand-written list, so
+  a test now fails on any payload-shaped read that is not declared;
+- `providerStatus.level`, invented; the rows carry `label` and `severity`, and
+  the daemon already drops healthy providers, so the filter written around it
+  was wrong as well as unnecessary.
 
 It also had a hole, found by injecting a typo rather than by reading it: string
 literals were stripped before scanning, and template literals went with them, so
@@ -34,8 +40,28 @@ character fails a push rather than a desktop. Teardown of every timer, signal
 and actor is asserted from the source, because a leak here is a leak inside the
 compositor.
 
+**The frame-rate cap.** The one piece of sprite handling that is an algorithm
+rather than an API call lives in its own gi-free module, so node executes it.
+Thirteen tests pin the rule a plausible implementation gets wrong — thin the
+frames, never stretch them — because raising each frame to the floor keeps all
+55 and turns a 2.75s loop into 22s.
+
+**GNOME API assumptions.** Checked against the documentation rather than
+memory, which found four that were wrong: `PopupSwitchMenuItem` does not lay
+out inside an St container, so the settings tab would have been blank;
+`Clutter.Content.get_preferred_size` returns `[ok, width, height]` in GJS, so
+destructuring two names bound the boolean to the width and every sprite was
+sized from it; `St.BoxLayout`'s `vertical` is deprecated from 48 while its
+replacement is undocumented in 45, so the property the running Shell has is
+used; and the pet sat in `_backgroundGroup`, which is private, renders nothing
+on a secondary monitor, and is below windows where upstream's floats above
+them.
+
 **Install.** CI installs from a clean checkout, starts the daemon, and fails
 unless a state file lands.
+
+**Settings coverage.** A test fails if any of the daemon's settings has no
+control in the UI. It found thirteen of seventeen unreachable.
 
 **Environment independence.** Every path override is cleared before each test.
 CI found this: the Cursor tests passed locally and failed on a runner, because a
