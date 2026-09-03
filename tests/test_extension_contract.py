@@ -500,3 +500,46 @@ def test_every_daemon_setting_is_reachable_from_the_ui():
     }
     missing = set(config_module.DEFAULTS) - reachable - not_for_the_ui
     assert not missing, f"settings with no control anywhere in the UI: {sorted(missing)}"
+
+
+# MARK: the rows the popup is expected to draw
+#
+# Reading a field is not the same as drawing it, and these went missing the
+# other way round: the daemon shipped them and the extension read none of them,
+# so a GNOME user saw less than a Windows user from the same state.json.
+
+
+def test_the_popup_reads_every_limit_window_the_account_has(payload):
+    """seven_day_opus and seven_day_sonnet are null now, so a model's weekly
+    limit arrives only in limits[]. Reading session and weekly alone is a row
+    short of what is actually in force."""
+    source = "\n".join(source_code(strip_strings=True))
+    assert "limits.scoped" in source, "the model-scoped weekly windows are not read"
+    assert payload["limits"]["scoped"], "the fixture has no scoped window to read"
+
+
+def test_the_popup_names_the_plan_the_way_the_daemon_built_it(payload):
+    """Upper-casing the raw type printed "MAX" and lost the 5x, which is the
+    part that says how many tokens the percentage is."""
+    source = "\n".join(source_code(strip_strings=True))
+    assert "limits.plan_text" in source
+    assert "toUpperCase" not in source, "the plan is being built in the front end"
+    assert "limits.account_text" in source
+
+
+def test_the_popup_draws_the_rolling_block(payload):
+    """What has been spent inside the current window, and where the forecast's
+    rate comes from."""
+    source = "\n".join(source_code(strip_strings=True))
+    assert "blocks" in source
+    assert payload["blocks"]["claude_code"]["total_tokens_compact"]
+
+
+def test_the_popup_renders_both_forecast_outcomes(payload):
+    """Reaching the limit is a warning with a time on it; not reaching it is
+    the reassurance shown most of the time. Only the first was drawn, so the
+    row was blank in the ordinary case."""
+    source = "\n".join(source_code(strip_strings=True))
+    assert "before_reset" in source
+    assert "no_limit_before_reset" in "\n".join(source_code())
+    assert "before_reset" in payload["burn"]["session"]

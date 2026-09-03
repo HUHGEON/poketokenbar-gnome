@@ -17,7 +17,7 @@ import {LANGUAGES} from './languages.js';
 import {Sprite} from './sprite.js';
 import {
     Meter, badge, button, column, heading, label, levelClass, paragraph,
-    placeholder, resetsIn, row, statLine, toggleRow,
+    placeholder, remainingSeconds, resetsIn, row, statLine, toggleRow,
 } from './widgets.js';
 
 /** Base: a vertical box that empties itself before each update. */
@@ -225,47 +225,99 @@ class HomeSection extends Section {
 
     _addLimits(state) {
         const t = key => this._reader.text(key);
-        const limits = state?.limits;
-        if (!limits || (!limits.session && !limits.weekly))
+        const fill = (key, ...values) => values.reduce(
+            (text, value, index) => text.replace(`%${index + 1}`, String(value)), t(key));
+        const limits = state?.limits ?? {};
+        const block = state?.blocks?.claude_code;
+        // Every window the account has, in the order the popover lists them:
+        // the two the legacy fields carry, then the model-scoped ones. Anthropic
+        // returns seven_day_opus and seven_day_sonnet as null now, so a model's
+        // weekly limit arrives only in limits[] — and reading session and weekly
+        // alone is a row short of what the account actually has.
+        const windows = [
+            ['session', t('five_hour_session'), limits.session],
+            ['weekly', t('weekly'), limits.weekly],
+            ...(limits.scoped ?? []).map(entry => [entry.kind, entry.name, entry]),
+        ].filter(([, , limitWindow]) => limitWindow);
+        if (windows.length === 0 && !block)
             return;
 
+        this.add_child(heading(t('limits_official')));
+
         // The plan is worth naming: the same percentage means a different
-        // number of tokens on Pro and on Max.
-        this.add_child(heading(limits.plan
-            ? `${t('limits_official')} · ${String(limits.plan).toUpperCase()}`
-            : t('limits_official')));
-
+        // number of tokens on Pro and on Max. The daemon builds "Max 5x" —
+        // upper-casing the raw type printed "MAX" and lost the multiplier.
+        if (limits.plan_text)
+            this.add_child(label(fill('plan_label', limits.plan_text), 'poketokenbar-subtle'));
         // Which account these are for. Someone signed into two is otherwise
-        // reading a bar that belongs to the other one.
-        const account = limits.account ?? {};
-        const who = account.email || account.name;
-        if (who) {
+        // reading a bar that belongs to the other one. The daemon drops a
+        // personal plan's generated organisation name, which only repeats the
+        // email.
+        if (limits.account_text) {
             this.add_child(label(
-                account.organization ? `${who} · ${account.organization}` : who,
-                'poketokenbar-subtle'));
+                fill('account_label', limits.account_text), 'poketokenbar-subtle'));
         }
-        for (const [key, name] of [['session', 'five_hour_session'], ['weekly', 'weekly']]) {
-            const limitWindow = limits[key];
-            if (!limitWindow)
-                continue;
-            const percent = Math.round(limitWindow.utilization ?? 0);
-            this.add_child(statLine(
-                t(name), `${percent}%`, `poketokenbar-value ${levelClass(limitWindow.severity)}`));
-            const meter = new Meter();
-            meter.setFraction(percent / 100, limitWindow.severity);
-            this.add_child(meter);
-            const resets = resetsIn(limitWindow.resets_at, t);
-            if (resets)
-                this.add_child(label(resets, 'poketokenbar-subtle'));
 
-            // The forecast belongs to the window it is a forecast for.
-            const burnRow = state?.burn?.[key];
-            if (burnRow?.eta_text) {
-                this.add_child(label(
-                    t('at_this_rate').replace('%1', burnRow.eta_text),
-                    'poketokenbar-subtle'));
-            }
+        // "Used" or "left" is a display transform only: the meter and its
+        // colour stay on the utilization, so a window at 95% is still red while
+        // it reads "5% left".
+        const remaining = state?.config?.limit_percent_mode === 'remaining';
+        for (const [key, name, limitWindow] of windows) {
+            const utilization = limitWindow.utilization ?? 0;
+            const shown = Math.round(remaining ? Math.max(0, 100 - utilization) : utilization);
+            const percent = remaining ? fill('percent_remaining', `${shown}%`) : `${shown}%`;
+            const resets = resetsIn(limitWindow.resets_at, t);
+            this.add_child(statLine(
+                name, resets ? `${percent} · ${resets}` : percent,
+                `poketokenbar-value ${levelClass(limitWindow.severity)}`));
+            const meter = new Meter();
+            meter.setFraction(utilization / 100, limitWindow.severity);
+            this.add_child(meter);
+            this._addForecast(state, key, t, fill);
         }
+
+        this._addBlock(block, t, fill);
+    }
+
+    /** Whether the window runs out before it resets.
+     *
+     * Two outcomes, not one: reaching the limit is a warning with a time on it,
+     * and not reaching it is the reassurance shown most of the time. Rendering
+     * only the first left the row blank in the ordinary case.
+     */
+    _addForecast(state, key, t, fill) {
+        const forecast = state?.burn?.[key];
+        if (!forecast)
+            return;
+        if (forecast.before_reset !== undefined) {
+            this.add_child(label(
+                forecast.before_reset
+                    ? `\u26a0 ${fill('forecast_reach', forecast.eta_text ?? '')}`
+                    : `\u2713 ${t('no_limit_before_reset')}`,
+                'poketokenbar-subtle'));
+        } else if (forecast.eta_text) {
+            this.add_child(label(
+                fill('at_this_rate', forecast.eta_text), 'poketokenbar-subtle'));
+        }
+    }
+
+    /** The rolling five-hour block.
+     *
+     * Not a limit window — it is what has been spent inside the current one,
+     * and where the forecast's rate comes from. It runs five hours from its
+     * earliest entry, so once that hour is past there is nothing left to count
+     * down to and the label goes: "reset" beside "resetting now" said nothing,
+     * and said it permanently.
+     */
+    _addBlock(block, t, fill) {
+        if (!block)
+            return;
+        const left = remainingSeconds(block.end_time);
+        const resets = left !== null && left > 0
+            ? `${t('reset')} ${resetsIn(block.end_time, t)}` : '';
+        this.add_child(statLine(
+            `${t('claude_current_block')}  ${block.total_tokens_compact ?? ''}`,
+            resets, 'poketokenbar-subtle'));
     }
 });
 
