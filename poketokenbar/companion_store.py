@@ -186,9 +186,18 @@ class CompanionStore:
             return None, False
         return mon.current_id, mon.is_shiny
 
+    def _egg_sprite(self) -> str:
+        if self.sprites is None:
+            return ""
+        path = self.sprites.egg_path()
+        return str(path) if path else ""
+
     def panel_sprite_path(self) -> str:
         species_id, shiny = self.panel_species()
-        if species_id is None or self.sprites is None:
+        if species_id is None:
+            # An egg is what the panel shows before the first hatch.
+            return self._egg_sprite()
+        if self.sprites is None:
             return ""
         path = self.sprites.path(species_id, animated=True, shiny=shiny)
         return str(path) if path else ""
@@ -233,7 +242,10 @@ class CompanionStore:
                 "egg_usage": self.state.egg_usage,
                 "egg_progress": round(progress, 4),
                 "egg_tier": str(self.state.egg_tier) if self.state.egg_tier else None,
-                "sprite_path": "",
+                # The real egg from PokeAPI, cropped. Before this the egg stage
+                # had no image at all and the front ends fell back to a glyph,
+                # which is not the same picture the macOS app shows.
+                "sprite_path": self._egg_sprite(),
                 "dex_count": len(self.state.dex),
                 "spendable_tokens": self.state.spendable_tokens,
                 "spendable_text": _compact(self.state.spendable_tokens),
@@ -311,18 +323,37 @@ class CompanionStore:
         path = self.sprites.item_path(name)
         return str(path) if path else ""
 
+    def _text(self, key: str, *values) -> str:
+        """A catalogue string in the save's language, placeholders filled.
+
+        The shop and the bag used to take their names and descriptions from
+        English-only tables, so setting the language translated everything
+        around them and left the items themselves in English.
+        """
+        text = l10n.t(key, self.state.language or "en")
+        for index, value in enumerate(values, start=1):
+            text = text.replace(f"%{index}", str(value))
+        return text
+
     def shop_payload(self) -> list[dict]:
         spendable = self.state.spendable_tokens
         out = []
         for e in shop.entries(self.state):
             if e.kind == "item":
                 sprite = self._item_sprite(e.key)
-                description = balance.ITEM_DESCRIPTION.get(e.key, "")
+                label = self._text(f"item_{e.key}")
+                description = self._item_description(e.key)
                 badge = ""
             else:
-                sprite = self._item_sprite("egg")
+                # The real egg, cropped — the same one the companion hatches
+                # from. ITEM_SPRITE has no "egg" entry, so asking for one
+                # returned nothing and every egg in the shop was a blank square.
+                sprite = self._egg_sprite()
                 tier = e.key.split(":")[1] if ":" in e.key else None
-                description = balance.EGG_DESCRIPTION.get(tier, "")
+                label = self._text(f"egg_name_{tier}" if tier else "egg_name")
+                description = (
+                    self._text("egg_desc_tier", self._text(tier)) if tier
+                    else self._text("egg_desc"))
                 badge = (tier or "").upper()
             out.append(
                 {
@@ -330,9 +361,13 @@ class CompanionStore:
                     "kind": e.kind,
                     "price": e.price,
                     "price_text": _compact(e.price),
-                    "label": e.label,
+                    "label": label,
                     "description": description,
                     "badge": badge,
+                    # The tier as a catalogue key, so a front end shows "고급"
+                    # rather than "UNCOMMON". `badge` stays for anything still
+                    # reading it.
+                    "rarity": tier if e.kind != "item" else None,
                     "sprite_path": sprite,
                     "emoji": {"rareCandy": "\N{CANDY}", "mint": "\N{HERB}",
                               "shinyCharm": "\N{SPARKLES}"}.get(e.key, "\N{EGG}"),
@@ -343,14 +378,28 @@ class CompanionStore:
             )
         return out
 
+    def _item_description(self, key: str) -> str:
+        # The candy's figure comes from the balance constant rather than being
+        # written into the sentence, so the two cannot drift apart.
+        if key == "rareCandy":
+            return self._text("item_desc_rareCandy",
+                              _compact(balance.RARE_CANDY_XP))
+        return self._text(f"item_desc_{key}")
+
+    def _item_effect(self, key: str) -> str:
+        if key == "rareCandy":
+            return self._text("item_effect_rareCandy",
+                              _compact(balance.RARE_CANDY_XP))
+        return self._text(f"item_effect_{key}")
+
     def bag_payload(self) -> list[dict]:
         emoji = {"rareCandy": "\N{CANDY}", "mint": "\N{HERB}", "shinyCharm": "\N{SPARKLES}"}
         return [
             {
                 "key": key,
-                "label": balance.ITEM_LABEL.get(key, key),
-                "description": balance.ITEM_DESCRIPTION.get(key, ""),
-                "effect": balance.ITEM_EFFECT.get(key, ""),
+                "label": self._text(f"item_{key}"),
+                "description": self._item_description(key),
+                "effect": self._item_effect(key),
                 "sprite_path": self._item_sprite(key),
                 "emoji": emoji.get(key, "?"),
                 "count": count,

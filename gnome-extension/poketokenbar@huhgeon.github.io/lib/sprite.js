@@ -18,13 +18,8 @@ import GObject from 'gi://GObject';
 import St from 'gi://St';
 
 import {DEFAULT_QUALITY, capFrameRate, frameFloor} from './framecap.js';
+import {MINIMUM_FRAME_MS, samePixels, walkFrames} from './frames.js';
 
-// GIF authoring commonly writes 0 or 10ms delays meaning "as fast as possible",
-// which browsers clamp. Without a floor a sprite would spin the compositor.
-const MINIMUM_FRAME_MS = 20;
-// Frames past this are dropped. Gen-V sprites run ~55 frames; anything far
-// beyond that is not one of ours and is not worth the memory.
-const MAX_FRAMES = 240;
 
 /** The Cogl context `set_bytes` wants, on the versions that want one.
  *
@@ -91,6 +86,30 @@ function frameFromPixbuf(pixbuf, delay) {
     return {content, delay, width, height};
 }
 
+/** A GLib.TimeVal driven forward by hand.
+ *
+ * GdkPixbuf's iterator is a function of wall-clock time and has no notion of
+ * "next frame", so decoding at full speed needs a clock that is not the wall
+ * clock. Kept behind two methods so `walkFrames` can be handed a plain object
+ * in a test.
+ */
+function syntheticClock() {
+    const timeVal = new GLib.TimeVal();
+    let micros = 0;
+    timeVal.tv_sec = 0;
+    timeVal.tv_usec = 0;
+    return {
+        advance(seconds) {
+            micros += Math.round(seconds * 1000000);
+            timeVal.tv_sec = Math.floor(micros / 1000000);
+            timeVal.tv_usec = micros % 1000000;
+        },
+        value() {
+            return timeVal;
+        },
+    };
+}
+
 /**
  * Decode every frame of a sprite file.
  *
@@ -116,39 +135,31 @@ export function decodeFrames(path) {
         }
     }
 
-    const frames = [];
-    // Walking the iterator by its own advertised delays is what keeps the loop
-    // the same length as the source; stepping by a fixed interval would play
-    // the animation at the wrong speed.
+    const clock = syntheticClock();
     let iter;
     try {
-        // Passing null starts the iterator at "now"; delays are then relative.
-        iter = animation.get_iter(null);
+        iter = animation.get_iter(clock.value());
     } catch (_e) {
         return [];
     }
 
-    let elapsedMs = 0;
-    for (let i = 0; i < MAX_FRAMES; i++) {
-        // get_delay_time is milliseconds; framecap and the frames themselves
-        // work in seconds, so the conversion happens once, here.
-        const delay = Math.max(MINIMUM_FRAME_MS, iter.get_delay_time()) / 1000;
-        let frame;
-        try {
-            frame = frameFromPixbuf(iter.get_pixbuf(), delay);
-        } catch (_e) {
-            break;
-        }
-        frames.push(frame);
-        elapsedMs += delay * 1000;
-        // advance() returns false when the frame did not change, which for a
-        // loop means we are back where we started.
-        if (!iter.advance(null) && i > 0)
-            break;
-        if (frames.length > 1 && elapsedMs > 60000)
-            break;  // pathological file; keep what we have
-    }
-    return frames;
+    let first = null;
+    return walkFrames(
+        iter, clock,
+        delay => {
+            const pixbuf = iter.get_pixbuf();
+            const frame = frameFromPixbuf(pixbuf, delay);
+            if (first === null)
+                first = pixbuf.read_pixel_bytes().toArray();
+            return frame;
+        },
+        () => {
+            try {
+                return samePixels(first, iter.get_pixbuf().read_pixel_bytes().toArray());
+            } catch (_e) {
+                return true;
+            }
+        });
 }
 
 /**

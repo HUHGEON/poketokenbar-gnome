@@ -8,7 +8,24 @@ from pathlib import Path
 
 from . import commands, config, platform_paths, state
 from .companion_store import CompanionStore
+from . import autostart
+from . import burn as burn_module
 from .burn import BurnTracker
+
+
+def _epoch_of(iso: str | None) -> float | None:
+    """An ISO instant as a POSIX timestamp, or None if it is not one."""
+    if not iso:
+        return None
+    from datetime import datetime, timezone
+
+    try:
+        moment = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.timestamp()
 from .notify import Notifier
 from .status import StatusChecker
 from .limits_source import LimitsSource
@@ -49,6 +66,40 @@ class Daemon:
         value = configured.get(provider_id)
         return value if isinstance(value, str) and value.strip() else None
 
+    def _burn_payload(self, limit_status, blocks: dict) -> dict:
+        """The forecast rows, from the block rate rather than from sampling.
+
+        The sampler stays as the source for windows with no block behind them —
+        it is the only thing that can say anything about the weekly limit — but
+        the 5-hour row prefers the block estimate, which answers on the first
+        poll instead of after three.
+        """
+        payload = self.burn.payload() if self.burn is not None else {}
+        session = getattr(limit_status, "session", None)
+        block = blocks.get("claude_code")
+        if session is None or block is None:
+            return payload
+
+        forecast = burn_module.depletion_forecast(
+            session.utilization,
+            _epoch_of(session.resets_at),
+            block.total_tokens,
+            block.tokens_per_minute,
+        )
+        if forecast is None:
+            # Nothing projectable. The stale sampled row is dropped rather than
+            # left standing beside a block that no longer supports it.
+            payload.pop("session", None)
+            return payload
+        row = dict(payload.get("session") or {})
+        row.update({
+            "eta_text": forecast.eta_text,
+            "minutes_to_full": round(forecast.minutes),
+            "before_reset": forecast.before_reset,
+        })
+        payload["session"] = row
+        return payload
+
     def settings_payload(self) -> dict:
         """Provider rows for the settings page, with live extra-folder counts."""
         from . import scan_roots
@@ -79,6 +130,15 @@ class Daemon:
                     self.limits_source.invalidate()
             elif name == "reload_config":
                 self.config_values = config.load(self.config_path)
+                # The login entry is a file on disk, so the setting only means
+                # anything if something writes it. The daemon does it rather
+                # than the tray: it is the half that is guaranteed to be
+                # running, and a setting changed through poketokenctl has to
+                # take effect too.
+                try:
+                    autostart.apply(bool(self.config_values.get("launch_at_login")))
+                except OSError as exc:
+                    errors.append(f"autostart: {exc}")
             elif name in ("export", "import") and self.companion_store is not None:
                 target = (command.get("args") or {}).get("path", "")
                 try:
@@ -141,6 +201,19 @@ class Daemon:
                 bucket = periods.setdefault(key, {"tokens": 0, "cost": 0.0})
                 bucket["tokens"] += result[key]["tokens"]
                 bucket["cost"] += result[key]["cost"]
+
+        # The rolling 5-hour block per provider. It carries the tokens/minute
+        # the limit forecast is derived from, so without it the popup can say
+        # how full the window is but not when it runs out.
+        blocks: dict = {}
+        for provider in self.providers:
+            try:
+                enrichment = provider.fetch_enrichment()
+            except Exception as exc:
+                errors.append(f"{provider.id} block: {exc}")
+                continue
+            if enrichment.blocks_ok and enrichment.active_block is not None:
+                blocks[provider.id] = enrichment.active_block
 
         limit_status = None
         if self.limits_source is not None:
@@ -233,7 +306,8 @@ class Daemon:
             rarity_counts=self.companion_store.rarity_counts() if self.companion_store else None,
             catch_counts=self.companion_store.catch_rarity_counts() if self.companion_store else None,
             periods=periods,
-            burn=self.burn.payload() if self.burn is not None else None,
+            burn=self._burn_payload(limit_status, blocks),
+            blocks=blocks,
             provider_status=status_payload,
             celebration=self.companion_store.celebration if self.companion_store else None,
             settings=self.settings_payload(),

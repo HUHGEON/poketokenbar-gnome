@@ -106,9 +106,12 @@ def test_graduation_records_the_full_chain():
 
 
 def test_graduation_marks_the_base_final_pair_as_collected():
+    """"base:final", the key the branch preference looks the pair up by. It is
+    written the way upstream writes it — the two halves are read back apart, so
+    both ends have to agree on the separator."""
     s = _hatched(forms=1)
     apply_usage(s, balance.graduation_total(Rarity.COMMON))
-    assert "1-1" in s.collected_finals
+    assert "1:1" in s.collected_finals
 
 
 def test_rarer_lines_take_longer_to_graduate():

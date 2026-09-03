@@ -34,7 +34,7 @@ jobs:
       # These execute extension code rather than reading it, so a failure here
       # is a real behavioural regression, not a naming one.
       - name: JavaScript unit tests
-        run: node --test tests/js/
+        run: node --test "tests/js/*.test.mjs"
 
       - name: The JavaScript checks actually ran
         # A skip here is indistinguishable from a pass in the summary, and the

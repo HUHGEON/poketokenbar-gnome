@@ -14,18 +14,115 @@ from . import balance
 from .balance import Rarity
 
 
+# Animated Black/White assets exist for Gen I-V only. A species without one is
+# pruned from the tree along with everything below it, so a line can never plan
+# a route through a form that has no sprite.
+MAX_ANIMATED_SPECIES_ID = 649
+
+
+@dataclass(slots=True)
+class EvoNode:
+    """One species in an evolution tree, with the forms it can become.
+
+    A tree, not a list, because evolution branches: Eevee has eight children,
+    Wurmple two, and which one a companion takes is a decision — one this port
+    used to make by always taking the first, so seven of Eevee's eight forms
+    were unreachable and the Pokedex could never be completed.
+    """
+
+    species_id: int
+    children: list["EvoNode"] = field(default_factory=list)
+
+    @property
+    def depth(self) -> int:
+        """Forms along the longest route. Branches are usually the same depth."""
+        return 1 + max((child.depth for child in self.children), default=0)
+
+    @property
+    def finals(self) -> list[int]:
+        """Every final form reachable from here."""
+        if not self.children:
+            return [self.species_id]
+        return [final for child in self.children for final in child.finals]
+
+    def find(self, species_id: int) -> "EvoNode | None":
+        if self.species_id == species_id:
+            return self
+        for child in self.children:
+            found = child.find(species_id)
+            if found is not None:
+                return found
+        return None
+
+    def keeping_animated(self) -> "EvoNode | None":
+        """The tree with unsupported species removed, subtree and all."""
+        if self.species_id > MAX_ANIMATED_SPECIES_ID:
+            return None
+        kept = [child.keeping_animated() for child in self.children]
+        return EvoNode(self.species_id, [child for child in kept if child is not None])
+
+    @staticmethod
+    def chain(path_ids: list[int]) -> "EvoNode | None":
+        """A straight line as a tree — what a branchless line looks like."""
+        node = None
+        for species_id in reversed(path_ids):
+            node = EvoNode(species_id, [node] if node else [])
+        return node
+
+
 @dataclass(slots=True)
 class EvoLine:
-    """One evolution line: ordered species ids from base to final."""
+    """One evolution line: the whole branching tree, plus who it belongs to.
+
+    `path_ids` is the route through it that a plan would take by default. It is
+    kept because a straight line is the common case and a caller with one does
+    not need to build a tree to describe it.
+    """
 
     base_id: int
     path_ids: list[int]
     rarity: Rarity
     names: dict[int, dict[str, str]] = field(default_factory=dict)
+    tree: EvoNode | None = None
+
+    def __post_init__(self) -> None:
+        if self.tree is None:
+            self.tree = EvoNode.chain(self.path_ids) or EvoNode(self.base_id)
 
     @property
     def total_forms(self) -> int:
-        return len(self.path_ids)
+        """Forms along the longest route, which is what the disguise roll asks
+        about — "does this line visibly evolve at all"."""
+        return self.tree.depth if self.tree else len(self.path_ids)
+
+
+def pick_planned_child(
+    node: EvoNode, base_id: int, collected_finals: set[str], rng: random.Random
+) -> EvoNode:
+    """Choose which form to grow into, preferring one you have not collected.
+
+    Ports pickPlannedChild: a branch is "fresh" when any final it leads to is
+    missing from the Pokedex, and fresh branches are the pool when there are
+    any. Without it the collection stalls — every Eevee would be the same one.
+    """
+    fresh = [
+        child for child in node.children
+        if any(f"{base_id}:{final}" not in collected_finals for final in child.finals)
+    ]
+    pool = fresh or node.children
+    return pool[rng.randrange(len(pool))]
+
+
+def plan_path(
+    line: EvoLine, collected_finals: set[str], rng: random.Random
+) -> list[int]:
+    """The route this companion will take, decided once at hatch."""
+    node = line.tree or EvoNode(line.base_id)
+    plan = [node.species_id]
+    while node.children:
+        node = pick_planned_child(node, line.base_id, collected_finals, rng)
+        plan.append(node.species_id)
+    return plan
 
 
 @dataclass(slots=True)
@@ -228,14 +325,18 @@ def roll_ditto(rng: random.Random, line: EvoLine) -> bool:
 def hatch(state: CompanionState, line: EvoLine, rng: random.Random) -> MonState:
     """Turn the egg into a companion. Shiny and nature are fixed here."""
     has_charm = state.inventory.get("shinyCharm", 0) > 0
+    # Which branch this one takes, chosen now and recorded. `total_forms` is
+    # the plan's length, not the tree's depth: a companion on a two-form branch
+    # of a three-deep tree has two stages to pay for, not three.
+    plan = plan_path(line, state.collected_finals, rng)
     mon = MonState(
         base_id=line.base_id,
-        path_ids=list(line.path_ids),
-        planned_path_ids=list(line.path_ids),
+        path_ids=list(plan),
+        planned_path_ids=list(plan),
         stage_index=0,
         used_at_stage=0,
         rarity=line.rarity,
-        total_forms=line.total_forms,
+        total_forms=len(plan),
         is_shiny=roll_shiny(rng, has_charm),
         nature=roll_nature(rng),
         hatched_at=__import__("time").time(),
@@ -267,10 +368,15 @@ def graduate(state: CompanionState, mon: MonState, now: float | None = None) -> 
         raised_seconds=(now - mon.hatched_at) if mon.hatched_at else None,
     )
     state.dex.append(entry)
-    state.collected_finals.add(f"{mon.base_id}-{mon.current_id}")
+    state.collected_finals.add(f"{mon.base_id}:{mon.current_id}")
     state.active = None
     state.egg_usage = 0
     return entry
+
+
+# The Swift loop's guard. Reached only by a corrupted save; a real line runs
+# out of forms long before this.
+MAX_GROWTH_STEPS = 50
 
 
 def apply_usage(
@@ -310,20 +416,32 @@ def apply_usage(
     # --- growth ---
     mon = state.active
     mon.used_at_stage += tokens
-    while True:
+    # Bounded like the Swift loop rather than `while True`: a save with a
+    # nonsensical total_forms drives the threshold towards zero, and a zero
+    # threshold is an evolution on every iteration forever.
+    for _ in range(MAX_GROWTH_STEPS):
         threshold = balance.phase_threshold(mon.rarity, mon.total_forms, mon.stage_index)
         if mon.used_at_stage < threshold:
             break
-        mon.used_at_stage -= threshold
-        if mon.is_final_form:
-            events.graduated = graduate(state, mon)
-            break
-        mon.stage_index += 1
-        events.evolved_to = mon.current_id
-        # A disguised Ditto reveals itself on its first evolution — the moment
-        # the "evolution" would have to actually happen.
+
+        # The disguise is resolved before anything else, and without spending
+        # the threshold. A Ditto's borrowed line can end up a single form after
+        # the species data is normalised, and checking "is this the final form"
+        # first then graduates the disguise straight into the Pokedex — the
+        # wrong species, permanently, with the real Ditto never revealed.
         if mon.ditto_disguise is not None and not mon.ditto_revealed:
             mon.ditto_revealed = True
             events.ditto_revealed = True
+            break
+
+        if mon.is_final_form:
+            # No carry-over: graduation clears the slot and the next egg starts
+            # its incubation from zero.
+            events.graduated = graduate(state, mon)
+            break
+
+        mon.used_at_stage -= threshold  # overflow carries into the new stage
+        mon.stage_index += 1
+        events.evolved_to = mon.current_id
 
     return events

@@ -24,7 +24,7 @@ def default_path() -> Path:
     return platform_paths.state_base() / "poketokenbar" / "state.json"
 
 
-def _limits_payload(status) -> dict:
+def _limits_payload(status, strings: dict) -> dict:
     """Serialise a limits.LimitStatus, or an empty dict when unavailable."""
     if status is None:
         return {}
@@ -41,9 +41,42 @@ def _limits_payload(status) -> dict:
     return {
         "session": window(status.session),
         "weekly": window(status.weekly),
+        # Model-scoped weekly windows ("Weekly Fable"). They arrive only in
+        # limits[], never in the legacy fields, so a front end reading
+        # session/weekly alone is a row short of what the account actually has.
+        "scoped": [
+            {
+                "kind": entry.kind,
+                "model": entry.model,
+                # Resolved here, not in the front end: the name depends on the
+                # catalogue and every front end would otherwise repeat the rule.
+                "name": _scoped_name(entry, strings),
+                **(window(entry.window) or {}),
+            }
+            for entry in (status.scoped or [])
+            if window(entry.window) is not None
+        ],
         "plan": status.subscription_type,
+        "plan_text": limits.plan_display(status),
         "account": status.account or {},
+        "account_text": limits.account_display(status),
     }
+
+
+def _scoped_name(entry, strings: dict) -> str:
+    """The row label for a limits[] entry outside the legacy fields.
+
+    Ported from Localization.claudeLimitEntry: a scoped weekly with a model is
+    "Weekly <model>", and one without falls back to a label that says it is
+    scoped — plain "Weekly" would collide with the legacy weekly row above it.
+    """
+    weekly_scoped = strings.get("weekly_scoped", "Weekly (scoped)")
+    if entry.kind == "weekly_scoped":
+        if not entry.model:
+            return weekly_scoped
+        return strings.get("weekly_model", "Weekly %1").replace("%1", entry.model)
+    base = (entry.kind or "limit").replace("_", " ")
+    return f"{base} {entry.model}" if entry.model else base
 
 
 def _period_rows(periods: dict | None) -> dict:
@@ -108,12 +141,14 @@ def build(
     periods: dict | None = None,
     burn: dict | None = None,
     provider_status: dict | None = None,
+    blocks: dict | None = None,
     celebration: dict | None = None,
     settings: dict | None = None,
 ) -> dict:
     total_tokens = sum(d.total_tokens for d in daily_by_provider.values())
     total_cost = sum(d.total_cost for d in daily_by_provider.values())
     limit_mode = config_values.get("limit_display_mode", "both")
+    percent_mode = config_values.get("limit_percent_mode", "used")
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -138,10 +173,21 @@ def build(
                 "total_tokens_text": fmt.grouped(d.total_tokens),
                 "total_tokens_compact": fmt.compact(d.total_tokens),
                 "total_cost": d.total_cost,
+                # Preformatted like every other figure here. The popup prints
+                # a cost beside each provider's tokens and would otherwise
+                # have to reimplement the currency rules per front end.
+                "cost_text": fmt.cost(d.total_cost),
                 "input_tokens": d.input_tokens,
                 "output_tokens": d.output_tokens,
                 "cache_creation_tokens": d.cache_creation_tokens,
                 "cache_read_tokens": d.cache_read_tokens,
+                # The breakdown line is rendered compact ("cache r 478M"), so
+                # the compact forms belong here beside every other prepared
+                # number rather than being derived again per front end.
+                "input_compact": fmt.compact(d.input_tokens),
+                "output_compact": fmt.compact(d.output_tokens),
+                "cache_creation_compact": fmt.compact(d.cache_creation_tokens),
+                "cache_read_compact": fmt.compact(d.cache_read_tokens),
                 # One session log can carry several models — Pi and its forks
                 # route them all through one file — so the day is broken down
                 # by the model that actually answered.
@@ -149,7 +195,8 @@ def build(
             }
             for pid, d in daily_by_provider.items()
         },
-        "limits": _limits_payload(limit_status),
+        "limits": _limits_payload(
+            limit_status, l10n.catalogue(config_values.get("language", "en"))),
         "companion": companion_payload or {},
         "shop": shop_payload or [],
         "bag": bag_payload or [],
@@ -161,6 +208,21 @@ def build(
         "strings": l10n.catalogue(config_values.get("language", "en")),
         "celebration": celebration or {},
         "burn": burn or {},
+        # The rolling 5-hour block per provider — what the popup's
+        # "current 5h block" row shows, and where the forecast's rate comes
+        # from. Preformatted for the same reason everything else here is.
+        "blocks": {
+            pid: {
+                "total_tokens": block.total_tokens,
+                "total_tokens_text": fmt.grouped(block.total_tokens),
+                "total_tokens_compact": fmt.compact(block.total_tokens),
+                "cost_text": fmt.cost(block.cost_usd),
+                "tokens_per_minute": block.tokens_per_minute,
+                "start_time": block.start_time,
+                "end_time": block.end_time,
+            }
+            for pid, block in (blocks or {}).items()
+        },
         "provider_status": provider_status or {},
         # What the settings page needs that only the daemon can answer: which
         # sources are registered, and how many of a person's extra folders
@@ -177,14 +239,15 @@ def build(
             "cost_text": fmt.cost_compact(total_cost)
             if config_values.get("show_cost_in_menu")
             else "",
-            "limit_text": limits.panel_text(limit_status, limit_mode)
+            "limit_text": limits.panel_text(limit_status, limit_mode, percent_mode)
             if config_values.get("show_limit_in_menu")
             else "",
             # Structured form so the panel can colour each number on its own.
             "limit_windows": [
                 {
                     "value": w.utilization,
-                    "text": limits.format_percent(w.utilization),
+                    "text": limits.format_percent(
+                        limits.display_percent(w.utilization, percent_mode)),
                     "level": limits.level(
                         w.utilization,
                         config_values.get("warn_threshold", 80),
@@ -201,6 +264,11 @@ def build(
             "sprite_path": (companion_payload or {}).get(
                 "panel_sprite_path", (companion_payload or {}).get("sprite_path", "")
             ),
+            # Which species is pinned, so the settings dropdown can show the
+            # current choice rather than always reading "follow the current
+            # Pokemon" — the one state a pin has that nothing else exposes.
+            "representative_id": (companion_payload or {}).get(
+                "representative_species_id") or "",
         },
     }
 

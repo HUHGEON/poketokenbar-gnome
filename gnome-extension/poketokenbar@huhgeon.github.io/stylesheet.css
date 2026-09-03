@@ -228,3 +228,19 @@
 .poketokenbar-entry {
   padding: 4px 6px;
 }
+
+/* The Pokedex favourite. Filled and warm when this species is the one the
+   panel follows, hollow and quiet otherwise — the same control both ways, so
+   pressing it again releases the pin. */
+.poketokenbar-dexstar {
+    padding: 0 2px;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.poketokenbar-dexstar:hover {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.poketokenbar-dexstar-on {
+    color: #ff9f0a;
+}

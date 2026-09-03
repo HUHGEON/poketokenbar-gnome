@@ -3,6 +3,18 @@ from pathlib import Path
 
 import pytest
 
+
+def pytest_configure(config):
+    """Register the one custom marker.
+
+    Declared here as well as in pyproject: the ini registration is not picked
+    up when pytest is invoked with a different rootdir, and an unregistered
+    mark is a warning on every run.
+    """
+    config.addinivalue_line(
+        "markers",
+        "network: reaches the internet; skips itself when there is none")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Every variable that can move a path this project reads or writes.

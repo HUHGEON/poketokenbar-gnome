@@ -10,16 +10,19 @@ from __future__ import annotations
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QMovie, QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy,
+    QVBoxLayout, QWidget,
 )
+
+from . import theme
 
 # Utilisation bands, matching limits.level() in the daemon. Stated outright
 # rather than taken from the palette: "close to your limit" has to read as a
 # warning whatever theme is in use.
 LEVEL_COLOURS = {
-    "ok": "#3fb950",
-    "warn": "#d29922",
-    "crit": "#f85149",
+    "ok": theme.GREEN,
+    "warn": theme.ORANGE,
+    "crit": theme.RED,
 }
 
 
@@ -92,6 +95,7 @@ class Sprite(QLabel):
     def __init__(self, size: int = 64, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._size = size
+        self._fallback = ""
         self._path: str | None = None
         self._movie: QMovie | None = None
         self._quality = DEFAULT_QUALITY
@@ -103,6 +107,27 @@ class Sprite(QLabel):
         self.setAlignment(Qt.AlignCenter)
         self.setFixedSize(size, size)
 
+    def set_fallback(self, text: str) -> None:
+        """What to draw when there is no image.
+
+        Mint is a Gen-VIII item and PokeAPI has no sprite for it, so the daemon
+        ships an emoji beside every item for exactly this. Ignoring it left a
+        blank square in the shop where upstream shows a leaf.
+        """
+        if text == self._fallback:
+            return
+        self._fallback = text
+        if not self._path:
+            self._show_fallback()
+
+    def _show_fallback(self) -> None:
+        self.clear()
+        if not self._fallback:
+            return
+        self.setText(self._fallback)
+        self.setStyleSheet(f"font-size: {max(12, int(self._size * 0.7))}px;"
+                           " background: transparent;")
+
     def set_path(self, path: str | None) -> None:
         if path == self._path:
             return
@@ -111,7 +136,7 @@ class Sprite(QLabel):
             self._movie.stop()
             self._movie = None
         if not path:
-            self.clear()
+            self._show_fallback()
             return
 
         movie = QMovie(path)
@@ -128,8 +153,9 @@ class Sprite(QLabel):
         # a blank square.
         pixmap = QPixmap(path)
         if pixmap.isNull():
-            self.clear()
+            self._show_fallback()
             return
+        self.setText("")
         self.setPixmap(pixmap.scaled(
             self._size, self._size, Qt.KeepAspectRatio, Qt.FastTransformation))
 
@@ -198,45 +224,95 @@ class Sprite(QLabel):
         self._show_step()
 
 
+def _no_squeeze(container: QWidget) -> QWidget:
+    """Let a container grow but never shrink below what it asked for.
+
+    Qt's default vertical policy is Preferred, which permits a layout short of
+    room to compress a child *below its own minimum*. Inside a scroll area that
+    is silently wrong: instead of a scrollbar appearing, the tallest card is
+    crushed — which is what flattened the companion's name, meter and status
+    message into a 44px strip while the rows beneath it rendered fine. Minimum
+    means "sizeHint is the floor", so the body grows and the scroll area does
+    its job.
+    """
+    container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+    return container
+
+
 def label(text: str = "", *, dim: bool = False, bold: bool = False,
-          colour: str | None = None, size: int | None = None) -> QLabel:
+          colour: str | None = None, size: int | None = None,
+          faint: bool = False, wrap: bool = False) -> QLabel:
+    """One line of text, in one of the popover's three text weights.
+
+    `dim` and `faint` are the secondary and tertiary greys rather than a
+    palette role: the window paints its own dark surface, so palette(mid) would
+    be resolved against the system theme and come out unreadable on it.
+    """
     widget = QLabel(text)
-    parts = []
+    parts = [f"color: {colour or (theme.TERTIARY if faint else theme.SECONDARY if dim else theme.TEXT)}"]
     if bold:
-        parts.append("font-weight: bold")
-    if colour:
-        parts.append(f"color: {colour}")
+        parts.append("font-weight: 600")
     if size:
         parts.append(f"font-size: {size}px")
-    if dim:
-        parts.append("color: palette(mid)")
-    if parts:
-        widget.setStyleSheet("; ".join(parts))
+    parts.append("background: transparent")
+    widget.setStyleSheet("; ".join(parts))
+    if wrap:
+        widget.setWordWrap(True)
     widget.setTextInteractionFlags(Qt.TextSelectableByMouse)
     return widget
 
 
 def heading(text: str) -> QLabel:
-    return label(text, bold=True)
+    """A section title — the small grey caption above a group of rows."""
+    return label(text, dim=True, size=12)
 
 
-def row(*widgets: QWidget) -> QWidget:
+def big(text: str, size: int = 34) -> QLabel:
+    return label(text, bold=True, size=size)
+
+
+def badge(text: str, background: str, foreground: str, size: int = 10) -> QLabel:
+    """A rounded pill: rarity, "raising", a Pokedex number."""
+    widget = QLabel(text)
+    widget.setStyleSheet(
+        f"background: {background}; color: {foreground}; font-size: {size}px;"
+        f" font-weight: 600; border-radius: 5px; padding: 1px 6px;"
+    )
+    widget.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
+    return widget
+
+
+def rarity_badge(rarity: str | None, text: str) -> QLabel:
+    background, foreground = theme.rarity_colours(rarity)
+    return badge(text, background, foreground)
+
+
+def row(*widgets: QWidget, spacing: int = 6, stretch: bool = False) -> QWidget:
     container = QWidget()
     layout = QHBoxLayout(container)
     layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(spacing)
     for widget in widgets:
         layout.addWidget(widget)
-    return container
+    if stretch:
+        layout.addStretch(1)
+    return _no_squeeze(container)
+
+
+def spread(left: QWidget, right: QWidget) -> QWidget:
+    """Two widgets pushed to opposite edges — the shape of every stat line."""
+    container = QWidget()
+    layout = QHBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(6)
+    layout.addWidget(left)
+    layout.addStretch(1)
+    layout.addWidget(right)
+    return _no_squeeze(container)
 
 
 def stat_line(name: str, value: str, colour: str | None = None) -> QWidget:
-    container = QWidget()
-    layout = QHBoxLayout(container)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(label(name, dim=True))
-    layout.addStretch(1)
-    layout.addWidget(label(value, colour=colour))
-    return container
+    return spread(label(name, dim=True), label(value, colour=colour))
 
 
 def meter(fraction: float, level: str | None = None) -> QProgressBar:
@@ -247,45 +323,144 @@ def meter(fraction: float, level: str | None = None) -> QProgressBar:
     bar.setTextVisible(False)
     bar.setFixedHeight(6)
     bar.setStyleSheet(
-        "QProgressBar { border: none; background: palette(alternate-base); }"
-        f"QProgressBar::chunk {{ background: {level_colour(level)}; }}"
+        f"QProgressBar {{ border: none; background: {theme.RAISED};"
+        f" border-radius: 3px; }}"
+        f"QProgressBar::chunk {{ background: {level_colour(level)};"
+        f" border-radius: 3px; }}"
     )
     return bar
 
 
 def button(text: str, on_click, enabled: bool = True) -> QPushButton:
+    """A filled pill button — the shop's Buy, the bag's Use."""
     widget = QPushButton(text)
     widget.clicked.connect(on_click)
     widget.setEnabled(enabled)
+    widget.setCursor(Qt.PointingHandCursor)
+    widget.setStyleSheet(
+        f"QPushButton {{ background: {theme.RAISED}; color: {theme.TEXT};"
+        f" border: none; border-radius: 7px; padding: 5px 14px;"
+        f" font-size: 12px; font-weight: 600; }}"
+        f"QPushButton:hover {{ background: #4a4a4c; }}"
+        f"QPushButton:disabled {{ color: {theme.TERTIARY}; }}"
+    )
+    return widget
+
+
+def icon_button(glyph: str, on_click, tooltip: str = "", size: int = 15) -> QPushButton:
+    """A bare glyph — the footer's gear, power and refresh."""
+    widget = QPushButton(glyph)
+    widget.clicked.connect(on_click)
+    widget.setCursor(Qt.PointingHandCursor)
+    widget.setToolTip(tooltip)
+    widget.setFlat(True)
+    widget.setStyleSheet(
+        f"QPushButton {{ background: transparent; color: {theme.SECONDARY};"
+        f" border: none; font-size: {size}px; padding: 3px 6px; }}"
+        f"QPushButton:hover {{ color: {theme.TEXT}; }}"
+    )
     return widget
 
 
 def separator() -> QFrame:
     line = QFrame()
     line.setFrameShape(QFrame.HLine)
-    line.setFrameShadow(QFrame.Sunken)
+    line.setFixedHeight(1)
+    line.setStyleSheet(f"background: {theme.DIVIDER}; border: none;")
     return line
 
 
-def card(*widgets: QWidget) -> QWidget:
+def card(*widgets: QWidget, horizontal: bool = True, padding: int = 10,
+         spacing: int = 8, background: str | None = None) -> QWidget:
+    """The rounded surface every group of rows sits on."""
     container = QWidget()
     container.setStyleSheet(
-        "background: palette(alternate-base); border-radius: 6px;")
-    layout = QHBoxLayout(container)
-    layout.setContentsMargins(8, 6, 8, 6)
+        f"background: {background or theme.CARD}; border-radius: 10px;")
+    layout = (QHBoxLayout if horizontal else QVBoxLayout)(container)
+    layout.setContentsMargins(padding, padding, padding, padding)
+    layout.setSpacing(spacing)
     for widget in widgets:
         layout.addWidget(widget)
-    return container
+    return _no_squeeze(container)
 
 
-def column(*widgets: QWidget) -> QWidget:
+def column(*widgets: QWidget, spacing: int = 2, align_top: bool = False) -> QWidget:
     container = QWidget()
     layout = QVBoxLayout(container)
     layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(2)
+    layout.setSpacing(spacing)
     for widget in widgets:
         layout.addWidget(widget)
-    return container
+    if align_top:
+        layout.addStretch(1)
+    return _no_squeeze(container)
+
+
+class Segmented(QWidget):
+    """The tab strip, and the used/remaining switch in settings.
+
+    One button per option with the active one filled in the accent colour —
+    the shape the popover uses in three places, so it is one widget rather
+    than three near-copies.
+    """
+
+    def __init__(self, options, on_select, active=None, compact: bool = False) -> None:
+        super().__init__()
+        self._buttons = {}
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(2)
+        self.setStyleSheet(f"background: {theme.CARD}; border-radius: 9px;")
+        for value, text in options:
+            item = QPushButton(text)
+            item.setCursor(Qt.PointingHandCursor)
+            item.setFlat(True)
+            item.clicked.connect(lambda _=False, v=value: on_select(v))
+            self._buttons[value] = item
+            layout.addWidget(item)
+        self._compact = compact
+        self.set_active(active if active is not None else next(iter(self._buttons), None))
+
+    def set_active(self, active) -> None:
+        padding = "3px 10px" if self._compact else "6px 16px"
+        for value, item in self._buttons.items():
+            on = value == active
+            item.setStyleSheet(
+                f"QPushButton {{ border: none; border-radius: 7px;"
+                f" padding: {padding}; font-size: 12px; font-weight: 600;"
+                f" background: {theme.ACCENT if on else 'transparent'};"
+                f" color: {theme.TEXT if on else theme.SECONDARY}; }}"
+                + ("" if on else
+                   f"QPushButton:hover {{ color: {theme.TEXT}; }}")
+            )
+
+
+def chip(text: str, dot: str, active: bool, on_click=None) -> QWidget:
+    """A rarity filter: a coloured dot, a name and a count.
+
+    The dot keeps its hue whether or not the chip is selected — it is the
+    legend for the colour used on every badge in the grid, so greying it out
+    along with the text takes the legend away exactly when it is being read.
+    """
+    container = QWidget()
+    container.setCursor(Qt.PointingHandCursor)
+    container.setStyleSheet(
+        f"background: {theme.CARD if active else 'transparent'};"
+        f" border-radius: 9px;")
+    layout = QHBoxLayout(container)
+    layout.setContentsMargins(9, 3, 9, 3)
+    layout.setSpacing(5)
+    marker = QLabel("\u25cf")
+    marker.setStyleSheet(f"color: {dot}; font-size: 9px; background: transparent;")
+    caption = QLabel(text)
+    caption.setStyleSheet(
+        f"color: {theme.TEXT if active else theme.TERTIARY}; font-size: 11px;"
+        f" font-weight: 600; background: transparent;")
+    layout.addWidget(marker)
+    layout.addWidget(caption)
+    if on_click is not None:
+        container.mousePressEvent = lambda _event: on_click()
+    return _no_squeeze(container)
 
 
 def clear_layout(layout) -> None:

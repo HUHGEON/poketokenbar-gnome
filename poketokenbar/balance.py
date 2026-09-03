@@ -118,29 +118,9 @@ ITEM_SPRITE = {
     "shinyCharm": "shiny-charm",
 }
 
-ITEM_LABEL = {
-    "rareCandy": "Rare Candy",
-    "mint": "Mint",
-    "shinyCharm": "Shiny Charm",
-}
-
-ITEM_DESCRIPTION = {
-    "rareCandy": "Raises your Pokemon's EXP by 100M.",
-    "mint": "Randomly changes your Pokemon's nature.",
-    "shinyCharm": "While owned, raises the chance of hatching a shiny.",
-}
-
-ITEM_EFFECT = {
-    "rareCandy": "+100M XP",
-    "mint": "Random nature",
-    "shinyCharm": "Shiny rate up - active",
-}
-
-EGG_DESCRIPTION = {
-    None: "Send off your current Pokemon and start fresh with a new egg.",
-    "uncommon": "Send off your current Pokemon for an egg guaranteed to hatch Uncommon or better.",
-    "rare": "Send off your current Pokemon for an egg guaranteed to hatch Rare or better.",
-}
+# Item names, descriptions and effect hints live in l10n, keyed "item_<key>",
+# "item_desc_<key>" and "item_effect_<key>". They were English-only tables here
+# and that is why the shop stayed in English whatever the language was set to.
 
 NATURES = [
     "hardy", "lonely", "brave", "adamant", "naughty",

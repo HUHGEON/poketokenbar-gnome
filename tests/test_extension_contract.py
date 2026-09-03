@@ -21,7 +21,7 @@ from poketokenbar import limits, providers, state
 from poketokenbar.balance import Rarity
 from poketokenbar.companion import CompanionState, DexEntry, MonState
 from poketokenbar.companion_store import CompanionStore
-from poketokenbar.models import DailyUsage
+from poketokenbar.models import BlockUsage, DailyUsage
 
 class _StubSprites:
     """Enough of SpriteStore for the payload builders to fill their sprite rows."""
@@ -74,11 +74,23 @@ def full_payload() -> dict:
         rarity_counts=store.rarity_counts(),
         catch_counts=store.catch_rarity_counts(),
         periods={"week": {"tokens": 1, "cost": 0.0}, "month": {"tokens": 2, "cost": 0.0}},
-        burn={"session": {"rate_per_minute": 1.0, "minutes_to_full": 5, "eta_text": "x"}},
+        burn={"session": {"rate_per_minute": 1.0, "minutes_to_full": 5,
+                          "eta_text": "x", "before_reset": False}},
+        blocks={"claude_code": BlockUsage(
+            id="b", start_time="2026-09-03T00:00:00+00:00",
+            end_time="2026-09-03T05:00:00+00:00", is_active=True,
+            total_tokens=362_500_000, cost_usd=1.0, tokens_per_minute=50_000.0)},
         limit_status=limits.LimitStatus(
             session=limits.LimitWindow(utilization=42.0, resets_at="2h", severity="warn"),
             weekly=limits.LimitWindow(utilization=10.0, resets_at="5d", severity="ok"),
+            # The model-scoped weekly window, which arrives only in limits[] —
+            # the row a front end reading session/weekly alone is short of.
+            scoped=[limits.ScopedWindow(
+                kind="weekly_scoped", model="Fable",
+                window=limits.LimitWindow(utilization=0.4, resets_at="6d",
+                                          severity="ok"))],
             subscription_type="max",
+            rate_limit_tier="default_claude_max_5x",
             account={"email": "x@example.com"},
         ),
         # The real shape from StatusChecker.get(). Healthy providers are
@@ -236,6 +248,8 @@ ROW_ACCESSORS = {
     "providerRow": "settings_provider",
     "usageRow": "provider_usage",
     "burnRow": "burn_window",
+    "forecast": "burn_window",
+    "block": "active_block",
     "providerStatus": "provider_status",
     "config": "config",
 }
@@ -251,6 +265,8 @@ def row_keys(name: str, payload: dict) -> set[str]:
         return set(payload["providers"]["claude_code"])
     if name == "burn_window":
         return set(payload["burn"]["session"])
+    if name == "active_block":
+        return set(payload["blocks"]["claude_code"])
     if name == "provider_status":
         return set(payload["provider_status"]["anthropic"])
     if name == "settings_provider":
@@ -298,6 +314,7 @@ def test_row_fields_read_in_the_extension_exist(variable, block, payload):
 
 LIST_ROW_FIELDS = {
     "shop": {"key", "kind", "price", "price_text", "label", "description", "badge",
+             "rarity",
              "sprite_path", "emoji", "owned", "owned_count", "affordable"},
     "bag": {"key", "label", "description", "effect", "sprite_path", "emoji", "count",
             "usable", "passive"},
@@ -407,6 +424,10 @@ _NOT_PAYLOAD = {
     "payload", "obj", "parsed", "metadata", "css", "source", "text", "label",
     "pattern", "found", "out", "stem", "dir", "connection", "doc", "left",
     "details", "store", "currentRow", "summary", "buttons",
+    # GLib.TimeVal's own fields. It is a boxed type the sprite decoder drives
+    # by hand, not anything the daemon emits — and it is snake_case like every
+    # payload field, which is the only reason it lands here.
+    "timeVal",
     # Top-level access has its own test; repeating it here would only duplicate
     # the failure message.
     "state",

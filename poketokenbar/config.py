@@ -11,7 +11,7 @@ import json
 import os
 from pathlib import Path
 
-from . import platform_paths
+from . import l10n, platform_paths
 
 DEFAULTS: dict[str, object] = {
     "refresh_interval": 120,
@@ -21,6 +21,11 @@ DEFAULTS: dict[str, object] = {
     "show_cost_in_menu": False,
     "show_limit_in_menu": True,
     "limit_display_mode": "both",
+    # Whether a limit reads as how much is used or how much is left. Purely a
+    # display transform: colours, gauges and notification thresholds keep using
+    # the utilization, so "10% left" still shows red.
+    "limit_percent_mode": "used",
+    "launch_at_login": False,
     "limit_notifications": True,
     "companion_notifications": True,
     "status_checks_enabled": True,
@@ -32,7 +37,10 @@ DEFAULTS: dict[str, object] = {
     "floating_pet_x": 80,
     "floating_pet_y": 80,
     "floating_pet_bubble_alerts": True,
-    "language": "en",
+    # Filled at import from the system locale, as upstream does: a fresh
+    # install reading English on a Korean machine is a setting nobody goes
+    # looking for.
+    "language": l10n.system_default(),
     # How smoothly the panel sprite and the desktop pet animate: "saver",
     # "balanced" or "smooth". A frame costs a recomposite, so this is a real
     # power setting, and the default matches upstream's.
