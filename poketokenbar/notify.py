@@ -21,6 +21,8 @@ import shutil
 import subprocess
 import sys
 
+from . import l10n
+
 APP_NAME = "PokeTokenBar"
 ICON = "utilities-system-monitor"
 
@@ -147,25 +149,64 @@ def _send_windows(title: str, body: str) -> bool:
 
 
 class Notifier:
-    """Edge-triggered notifications for companion and limit events."""
+    """Edge-triggered notifications for companion and limit events.
+
+    Every string is resolved from the daemon's own catalogue in the language the
+    user picked. They used to be English literals here, so someone running the
+    UI in Korean got a Korean panel and English toasts — and the toast is the
+    part that arrives while they are looking at something else.
+    """
 
     def __init__(self, send_fn=send) -> None:
         self._send = send_fn
         # kind -> highest tier already announced (1 = warn, 2 = crit).
         self._limit_tier: dict[str, int] = {}
 
-    def companion(self, events, name: str | None = None) -> None:
+    def companion(
+        self,
+        events,
+        name: str | None = None,
+        language: str = "en",
+        shiny: bool = False,
+        disguise: str | None = None,
+    ) -> None:
+        """Announce what just happened to the companion.
+
+        `disguise` is the species a Ditto was pretending to be, which is the
+        only thing worth saying about a reveal — by the time this runs the
+        companion is already called Ditto.
+        """
         if events is None:
             return
-        label = name or "Your companion"
-        if events.hatched is not None:
-            self._send("An egg hatched!", f"{label} joined you.")
-        if events.evolved_to is not None:
-            self._send("Evolution!", f"{label} evolved.")
-        if events.graduated is not None:
-            self._send("Graduated!", f"{label} joined your Pokedex.")
+        t = lambda key: l10n.t(key, language)  # noqa: E731 — one line, one use
+        label = name or l10n.t("raising", language)
 
-    def limits(self, windows: dict[str, float], warn: float, crit: float) -> None:
+        if events.hatched is not None:
+            if shiny:
+                self._send(t("notif_shiny_hatch_title"),
+                           t("notif_shiny_hatch_body").replace("%1", label))
+            else:
+                self._send(t("notif_hatch_title"),
+                           t("notif_hatch_body").replace("%1", label))
+        # A Ditto's reveal replaces the evolution that triggered it: it did not
+        # become the next form, it stopped pretending.
+        if events.ditto_revealed:
+            was = disguise or label
+            if shiny:
+                self._send(t("notif_shiny_ditto_title"),
+                           t("notif_shiny_ditto_body").replace("%1", was))
+            else:
+                self._send(t("notif_ditto_title"),
+                           t("notif_ditto_body").replace("%1", was))
+        elif events.evolved_to is not None:
+            self._send(t("notif_evolve_title"),
+                       t("notif_evolve_body").replace("%1", label))
+        if events.graduated is not None:
+            self._send(t("notif_graduate_title"),
+                       t("notif_graduate_body").replace("%1", label))
+
+    def limits(self, windows: dict[str, float], warn: float, crit: float,
+               language: str = "en") -> None:
         """Announce a window crossing warn or crit, once per crossing.
 
         Keyed by window kind alone. The Swift app re-notified on every refresh
@@ -180,9 +221,11 @@ class Notifier:
             if tier <= previous:
                 continue
             self._limit_tier[kind] = tier
-            label = "5-hour" if kind == "session" else "weekly"
-            self._send(
-                f"{label.capitalize()} limit at {utilization:.0f}%",
-                "Usage is close to the cap." if tier == 1 else "Usage is nearly exhausted.",
-                urgency="critical" if tier == 2 else "normal",
-            )
+            window = l10n.t(
+                "five_hour_session" if kind == "session" else "weekly", language)
+            title = l10n.t(
+                "notif_limit_critical" if tier == 2 else "notif_limit_warning", language)
+            body = (l10n.t("notif_limit_body", language)
+                    .replace("%1", window)
+                    .replace("%2", f"{utilization:.0f}%"))
+            self._send(title, body, urgency="critical" if tier == 2 else "normal")

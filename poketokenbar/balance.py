@@ -118,6 +118,24 @@ ITEM_SPRITE = {
     "shinyCharm": "shiny-charm",
 }
 
+# Catalogue keys for the words each item is shown with: (name, description,
+# effect). The English tables below stay as the fallback for a caller with no
+# language — the shop and the bag resolve these instead, so a Korean UI stops
+# listing "Rare Candy · Raises your Pokemon's EXP by 100M." in English.
+ITEM_STRINGS = {
+    "rareCandy": ("item_rare_candy", "item_rare_candy_desc", "item_rare_candy_effect"),
+    "mint": ("item_mint", "item_mint_desc", "item_mint_effect"),
+    "shinyCharm": ("item_shiny_charm", "item_shiny_charm_desc", "item_shiny_charm_effect"),
+}
+
+# The egg tiers the shop sells, by the suffix in their key. None is the plain
+# egg with no guarantee.
+EGG_STRINGS = {
+    None: "egg_common",
+    "uncommon": "egg_uncommon",
+    "rare": "egg_rare",
+}
+
 ITEM_LABEL = {
     "rareCandy": "Rare Candy",
     "mint": "Mint",
