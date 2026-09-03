@@ -112,11 +112,27 @@ animation presets mean.
 ## Not verified
 
 **Rendering.** Nothing here proves an actor appears, that a GNOME API exists, or
-that the popup is laid out sensibly. That needs a GNOME desktop.
+that a popup is laid out sensibly. That needs a desktop.
 
-**Two provider paths.** Cursor's and Kiro's SQLite stores are the only two whose
-Linux location is not pinned by an upstream test; they follow the Electron and
-XDG conventions. `CURSOR_DATA_DIR` and `KIRO_CLI_HOME` override them.
+The GNOME extension has had one: it was run on Rocky Linux 10 with GNOME Shell
+47–48, and what that found — rendering stopping on a reused destroyed actor, a
+closed popup re-decoding every sprite every two seconds, a sprite decoded as two
+copies of its first frame — is the measure of what these checks cannot see.
+
+The **Windows tray UI** has not. The daemon and the tray application both run on
+a windows-latest runner, including the click path that lost the desktop pet, but
+nobody has looked at the result on a screen. Two things in particular are fixed
+by removing their cause rather than by reproducing the symptom: the pet's
+window flags, and the animated tray icon. macOS was tried as a stand-in for the
+first and does not reproduce it — the unfixed version survives there too — so
+that run says the fix breaks nothing and nothing about whether it works.
+
+**One provider path.** Kiro's SQLite store is the only location left without a
+source: its documentation says `~/.kiro/` while another source puts the macOS
+database under Application Support, so both are searched. Cursor's follows
+Electron's documented `app.getPath('userData')`, and OpenCode's is stated
+per-platform by its own troubleshooting page. `KIRO_CLI_HOME`, `KIRO_HOME`,
+`CURSOR_DATA_DIR` and `OPENCODE_DATA_DIR` override all of them.
 
 **Cursor's dashboard API.** Not ported. The local store is the fallback that
 path already uses, so usage reads offline; usage that never touched this machine
@@ -131,8 +147,13 @@ shipping a network path that could not be verified from this machine.
 ## Running them
 
 ```bash
-python -m pytest -q      # node must be on PATH, or the JavaScript checks skip
+python -m pytest -q               # node must be on PATH, or the JS checks skip
+node --test tests/js/*.test.mjs   # the checks that execute extension code
 ```
+
+The Qt front-end tests skip themselves when PySide6 is absent, so the count
+depends on the environment: CI's ubuntu job runs 932 and the Windows job, which
+installs PySide6, runs all 990.
 
 CI fails if those checks skip: a skip and a pass look identical in the summary,
 and they are the only thing covering the extension.
