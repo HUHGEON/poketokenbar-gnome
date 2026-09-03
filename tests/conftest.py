@@ -49,7 +49,9 @@ _HOME_VARIABLES = ("HOME", "USERPROFILE")
 # Cleared, the command spool falls back to the shared temporary directory, which
 # every user of the machine and every concurrent run of the suite would share.
 # It gets a directory inside the test home instead.
-_RUNTIME_VARIABLE = "XDG_RUNTIME_DIR"
+# Where the command spool goes, per platform: XDG_RUNTIME_DIR on Linux, TMPDIR
+# on macOS, TEMP or TMP on Windows.
+_RUNTIME_VARIABLES = ("XDG_RUNTIME_DIR", "TMPDIR", "TEMP", "TMP")
 
 
 @pytest.fixture(autouse=True)
@@ -77,5 +79,11 @@ def isolated_locations(monkeypatch, tmp_path_factory):
         monkeypatch.setenv(variable, str(home))
     runtime = home / "run"
     runtime.mkdir(exist_ok=True)
-    monkeypatch.setenv(_RUNTIME_VARIABLE, str(runtime))
+    # Every variable the command spool can land in, on every platform, not just
+    # the one the suite happens to be running on. XDG_RUNTIME_DIR alone left
+    # Windows resolving the spool into the shared %TEMP%, which is outside the
+    # test home — caught by the guard in test_path_isolation, on the Windows
+    # job, where it is the only place it can be caught.
+    for variable in _RUNTIME_VARIABLES:
+        monkeypatch.setenv(variable, str(runtime))
     return home
