@@ -60,12 +60,6 @@ from poketokenbar.ui.widgets import Sprite, level_colour, meter  # noqa: E402
 from test_extension_contract import full_payload  # noqa: E402
 
 
-@pytest.fixture(scope="session")
-def qt_app():
-    """The one QApplication; Qt allows exactly one per process."""
-    return _APPLICATION
-
-
 @pytest.fixture(scope="module")
 def payload():
     return full_payload()

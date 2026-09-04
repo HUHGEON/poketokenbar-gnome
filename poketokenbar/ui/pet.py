@@ -14,7 +14,7 @@ reboot.
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 
 from .widgets import Sprite, label
 
@@ -70,8 +70,13 @@ class DesktopPet(QWidget):
     # --- state -------------------------------------------------------------
 
     def set_size(self, size: int) -> None:
-        self.sprite.setFixedSize(size, size)
-        self.sprite._size = size
+        """Resize the window and the sprite in it.
+
+        Poking the sprite's private size did the first half only: the picture
+        had already been scaled when it was loaded, and nothing rescaled it, so
+        the slider moved the box and left the Pokemon the size it was.
+        """
+        self.sprite.set_size(size)
         self.setFixedSize(size, size)
 
     def update_state(self, state: dict | None) -> None:
@@ -104,17 +109,45 @@ class DesktopPet(QWidget):
         self.setToolTip(self._tooltip_text)
 
     def place(self, x: int, y: int) -> None:
-        """Move the pet, clamped so it cannot end up off every screen.
+        """Move the pet, keeping it reachable on some screen.
 
-        A position saved on a monitor that is no longer attached would
-        otherwise leave it invisible with no way to get it back.
+        Clamped to the screen the position lands on, not to the one the pet is
+        currently on — that made the edge of the current monitor a wall, so a
+        pet on the primary display could never be dragged onto the second.
+
+        A position on a monitor that is no longer attached still has to end up
+        somewhere visible, so a point that belongs to no screen is pulled into
+        the nearest one rather than left where it was.
         """
-        screen = self.screen() or self.parentWidget()
-        if screen is not None and hasattr(screen, "availableGeometry"):
-            area = screen.availableGeometry()
-            x = max(area.left(), min(int(x), area.right() - self.width()))
-            y = max(area.top(), min(int(y), area.bottom() - self.height()))
-        self.move(int(x), int(y))
+        x, y = int(x), int(y)
+        screen = self._screen_for(x, y)
+        if screen is None:
+            self.move(x, y)
+            return
+        area = screen.availableGeometry()
+        self.move(
+            max(area.left(), min(x, area.right() - self.width() + 1)),
+            max(area.top(), min(y, area.bottom() - self.height() + 1)),
+        )
+
+    def _screen_for(self, x: int, y: int):
+        """The screen a position belongs to, else the nearest one.
+
+        Nearest by the distance to each screen's rectangle, so dragging past
+        the edge of one monitor hands the pet to whichever is actually next to
+        it — including one above or below, which comparing centres gets wrong
+        on a stacked arrangement.
+        """
+        application = QApplication.instance()
+        screens = list(application.screens()) if application else []
+        if not screens:
+            return None
+        centre = QPoint(x + self.width() // 2, y + self.height() // 2)
+        for screen in screens:
+            if screen.geometry().contains(centre):
+                return screen
+        return min(screens, key=lambda s: _distance(s.geometry(), centre))
+
 
     # --- interaction --------------------------------------------------------
 
@@ -147,3 +180,10 @@ class DesktopPet(QWidget):
         else:
             self._on_activate()
         event.accept()
+
+
+def _distance(rect, point: QPoint) -> int:
+    """Squared distance from a point to a rectangle, zero inside it."""
+    dx = max(rect.left() - point.x(), 0, point.x() - rect.right())
+    dy = max(rect.top() - point.y(), 0, point.y() - rect.bottom())
+    return dx * dx + dy * dy
