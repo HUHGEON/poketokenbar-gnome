@@ -87,3 +87,34 @@ def isolated_locations(monkeypatch, tmp_path_factory):
     for variable in _RUNTIME_VARIABLES:
         monkeypatch.setenv(variable, str(runtime))
     return home
+
+
+@pytest.fixture(scope="session")
+def qt_app():
+    """The one QApplication; Qt allows exactly one per process.
+
+    Here rather than in a single test module because more than one file needs
+    it, and a second QApplication is not something a fixture can hand out.
+    Skips the test when PySide6 is absent, which is how the Qt front end stays
+    optional.
+    """
+    pytest.importorskip("PySide6", reason="the Qt front end is optional")
+
+    import os
+    import sys
+
+    # Must be set before a QApplication exists, and it is process-wide.
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+
+    existing = getattr(sys, "_poketokenbar_qt", None)
+    if existing is not None:
+        return existing[0]
+    # Parked on `sys`, not in a module global: Qt segfaults if the application
+    # is destroyed while widgets and their timers are still alive, and at
+    # interpreter shutdown module globals are cleared in an order nothing here
+    # controls. The crash that avoids happens after every test has passed,
+    # which makes it invisible in the report and fatal to the exit code.
+    application = QApplication.instance() or QApplication([])
+    sys._poketokenbar_qt = (application, [])
+    return application

@@ -8,7 +8,7 @@ files and it does the rest.
 from __future__ import annotations
 
 from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QMovie, QPixmap
+from PySide6.QtGui import QImageReader, QMovie, QPixmap
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy,
     QVBoxLayout, QWidget,
@@ -132,32 +132,71 @@ class Sprite(QLabel):
         if path == self._path:
             return
         self._path = path
+        self._load()
+
+    def set_size(self, size: int) -> None:
+        """Resize the box and what is in it.
+
+        The sprite is reloaded rather than rescaled, because a QMovie cannot be
+        rescaled: `setScaledSize` is honoured only until the first frame has
+        been decoded and is silently ignored after that — measured, with and
+        without caching. Changing the box alone was what left the slider moving
+        the frame and not the Pokemon inside it.
+        """
+        if size == self._size:
+            return
+        self._size = size
+        self.setFixedSize(size, size)
+        self._load()
+
+    def _load(self) -> None:
+        """Open whatever `_path` names, fitted to the current box."""
         if self._movie is not None:
             self._movie.stop()
             self._movie = None
-        if not path:
+        self._timer.stop()
+        self._schedule = []
+        self._step = 0
+        if not self._path:
             self._show_fallback()
             return
 
-        movie = QMovie(path)
-        if movie.isValid():
-            # Scaled here rather than by the label: QMovie renders at its own
-            # size and a scaledContents label would resample every frame.
-            movie.setScaledSize(QSize(self._size, self._size))
-            self._movie = movie
-            self.setMovie(movie)
-            self._rebuild_schedule()
-            return
+        # The size on disk, without decoding anything: a QMovie reports its
+        # *scaled* size once it has produced a frame, so asking it would fit an
+        # already-fitted size on the second pass.
+        reader = QImageReader(self._path)
+        native = reader.size()
+        frames = reader.imageCount()
+        fitted = (native.scaled(QSize(self._size, self._size), Qt.KeepAspectRatio)
+                  if not native.isEmpty() else QSize(self._size, self._size))
 
-        # A still PNG, or a GIF Qt could not read. Either way one frame beats
+        if frames > 1:
+            movie = QMovie(self._path)
+            # Without this every jumpToFrame that is not the next one fails
+            # silently and the movie stays where it was. A GIF decodes
+            # sequentially, so seeking backwards — which is what the end of a
+            # loop does — needs the frames kept. Measured on a 178-frame
+            # sprite: uncached, jumps to 10, 40 and 3 all returned false and
+            # left it on frame 0, so the pet held one pose at every quality.
+            movie.setCacheMode(QMovie.CacheAll)
+            if movie.isValid():
+                # Before the first frame, or it is ignored for the movie's life.
+                movie.setScaledSize(fitted)
+                self._movie = movie
+                self.setMovie(movie)
+                self._rebuild_schedule()
+                return
+
+        # A still image, or a GIF Qt could not read. Either way one frame beats
         # a blank square.
-        pixmap = QPixmap(path)
+        pixmap = QPixmap(self._path)
         if pixmap.isNull():
             self._show_fallback()
             return
         self.setText("")
         self.setPixmap(pixmap.scaled(
-            self._size, self._size, Qt.KeepAspectRatio, Qt.FastTransformation))
+            fitted.width() or self._size, fitted.height() or self._size,
+            Qt.KeepAspectRatio, Qt.FastTransformation))
 
     def set_quality(self, quality: str) -> None:
         """Change how smoothly this sprite animates.
