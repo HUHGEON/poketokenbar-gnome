@@ -32,13 +32,25 @@ from . import theme
 from .widgets import (
     Segmented, Sprite, badge, big, button, card, chip, clear_layout, column,
     heading, icon_button, label, level_colour, meter, rarity_badge, row,
-    separator, spread, stat_line,
+    separator, spread, stat_line, wrap_row,
 )
 
 # How many Pokedex cells fit on a page. Four columns, six rows — the grid the
 # macOS popover uses at this window width.
 DEX_COLUMNS = 4
 DEX_PER_PAGE = 24
+
+# Every cell is this wide inside its padding, whatever is in it. Nothing in a
+# cell may set the column width, because all of it is translated: Korean names
+# fit at four columns and "Seismitoad" and "Crapustule" do not, so an un-elided
+# label pushed the grid past the popup and clipped the fourth column off the
+# right edge entirely.
+#
+# The budget, measured: a 392px viewport (400 less the 8px scrollbar) less the
+# panel's 28px of margins leaves 364 for four cells and three gaps. 78 is what
+# the widest thing a cell can hold actually needs — a "EN ELEVAGE" badge at 77,
+# and a shiny number beside the star at 76 — and 4 x (78 + 8) + 3 x 5 is 359.
+DEX_CELL_WIDTH = 78
 
 RARITIES = ("legendary", "rare", "uncommon", "common")
 
@@ -580,7 +592,7 @@ class CollectionPanel(Panel):
                 active=self._rarity == key or (self._rarity is None and count > 0),
                 on_click=lambda k=key: self._filter(k),
             ))
-        return row(*widgets, spacing=2, stretch=True)
+        return wrap_row(*widgets, spacing=2)
 
     def _filter(self, rarity: str) -> None:
         self._rarity = None if self._rarity == rarity else rarity
@@ -612,7 +624,7 @@ class CollectionPanel(Panel):
         grid_widget = QWidget()
         grid = QGridLayout(grid_widget)
         grid.setContentsMargins(0, 4, 0, 4)
-        grid.setSpacing(6)
+        grid.setSpacing(5)
         for index, entry in enumerate(page):
             grid.addWidget(self._cell(entry), index // DEX_COLUMNS, index % DEX_COLUMNS)
         self.add(grid_widget)
@@ -650,6 +662,7 @@ class CollectionPanel(Panel):
                 f"color: {theme.SECONDARY}", f"color: {theme.ORANGE}"))
 
         header = QWidget()
+        header.setFixedWidth(DEX_CELL_WIDTH)
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(0)
@@ -663,12 +676,19 @@ class CollectionPanel(Panel):
         if entry.get("is_raising"):
             raising = row(badge(self.t("raising"), theme.ACCENT, "#ffffff", size=9))
             raising.layout().setAlignment(Qt.AlignCenter)
+            raising.setFixedWidth(DEX_CELL_WIDTH)
             parts.append(raising)
-        name = label(entry.get("name") or f"#{species}", size=11)
+        full_name = entry.get("name") or f"#{species}"
+        name = label(full_name, size=11)
         name.setAlignment(Qt.AlignCenter)
+        name.setFixedWidth(DEX_CELL_WIDTH)
+        name.setText(name.fontMetrics().elidedText(
+            full_name, Qt.ElideRight, DEX_CELL_WIDTH))
+        if name.text() != full_name:
+            name.setToolTip(full_name)
         parts.append(name)
 
-        return card(column(*parts, spacing=3), horizontal=False, padding=6)
+        return card(column(*parts, spacing=3), horizontal=False, padding=4)
 
     def _pinned(self) -> str:
         return str(((self._state or {}).get("panel") or {}).get("representative_id") or "")
