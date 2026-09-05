@@ -7,11 +7,11 @@ files and it does the rest.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer
 from PySide6.QtGui import QImageReader, QMovie, QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy,
-    QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QLayout, QProgressBar, QPushButton,
+    QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from . import theme
@@ -336,6 +336,84 @@ def row(*widgets: QWidget, spacing: int = 6, stretch: bool = False) -> QWidget:
     if stretch:
         layout.addStretch(1)
     return _no_squeeze(container)
+
+
+class _FlowLayout(QLayout):
+    """A horizontal layout that wraps instead of forcing the window wider.
+
+    The rarity filter is four chips whose text is translated, and a QHBoxLayout
+    reports the sum of them as a minimum. Korean fits in 252px; French needs
+    397 in a 368px column, and Qt honoured that by widening the scroll content
+    until the fourth Pokedex column fell off the right edge of the popup. So
+    the row wraps: one line in Korean and Japanese, two in French and German,
+    and nothing is clipped in a language nobody has added yet.
+    """
+
+    def __init__(self, spacing: int = 2) -> None:
+        super().__init__()
+        self._items: list = []
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setSpacing(spacing)
+
+    def addItem(self, item) -> None:  # noqa: N802 - Qt override
+        self._items.append(item)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, index: int):  # noqa: N802 - Qt override
+        return self._items[index] if 0 <= index < len(self._items) else None
+
+    def takeAt(self, index: int):  # noqa: N802 - Qt override
+        return self._items.pop(index) if 0 <= index < len(self._items) else None
+
+    def expandingDirections(self):  # noqa: N802 - Qt override
+        return Qt.Orientations(Qt.Orientation(0))
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802 - Qt override
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt override
+        return self._lay(QRect(0, 0, width, 0), apply=False)
+
+    def setGeometry(self, rect) -> None:  # noqa: N802 - Qt override
+        super().setGeometry(rect)
+        self._lay(rect, apply=True)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt override
+        return self.minimumSize()
+
+    def minimumSize(self) -> QSize:  # noqa: N802 - Qt override
+        # The widest single chip, not the sum: that is what makes the wrap a
+        # real answer rather than a delayed version of the same overflow.
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        return size
+
+    def _lay(self, rect, *, apply: bool) -> int:
+        x, y, line_height = rect.x(), rect.y(), 0
+        for item in self._items:
+            hint = item.sizeHint()
+            if line_height and x + hint.width() > rect.right() + 1:
+                x, y = rect.x(), y + line_height + self.spacing()
+                line_height = 0
+            if apply:
+                item.setGeometry(QRect(QPoint(x, y), hint))
+            x += hint.width() + self.spacing()
+            line_height = max(line_height, hint.height())
+        return y + line_height - rect.y()
+
+
+def wrap_row(*widgets: QWidget, spacing: int = 2) -> QWidget:
+    """A row of widgets that wraps onto a second line when it does not fit."""
+    container = QWidget()
+    layout = _FlowLayout(spacing)
+    for widget in widgets:
+        layout.addWidget(widget)
+    container.setLayout(layout)
+    container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+    return container
 
 
 def spread(left: QWidget, right: QWidget) -> QWidget:
