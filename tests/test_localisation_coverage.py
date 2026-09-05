@@ -188,6 +188,9 @@ def test_no_two_settings_share_a_label(language):
     you are about to change. `setting_limit_display` and
     `setting_limit_percent` were both "한도 표시 방식" — one is upstream's
     used-versus-remaining, the other is this port's which-windows-to-show."""
+    # The Qt front end is optional, and the job that runs without it still has
+    # every other check in this file to run.
+    pytest.importorskip("PySide6", reason="the Qt front end is optional")
     from poketokenbar.ui import panels
 
     catalogue = l10n.catalogue(language)
