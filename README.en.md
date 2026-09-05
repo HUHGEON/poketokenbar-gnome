@@ -47,17 +47,18 @@ call to produce a single number.
 | Tests | ✅ 1094 Python + 19 JavaScript, CI green |
 | Install verified from a clean checkout | ✅ In CI |
 | Daemon verified running on real Windows | ✅ On CI's windows-latest runner |
-| **UI verified on a real Windows screen** | ❌ **Not yet** ([#7](../../issues/7)) |
+| **UI verified on a real Windows screen** | ✅ **Confirmed on Windows 10** ([#7](../../issues/7)) |
 
 The extension was actually run by [@UHeeJoon](https://github.com/UHeeJoon) on Rocky Linux 10 /
 GNOME Shell 47–48, and the defects that surfaced there are fixed — rendering that stopped because
 a destroyed actor was reused, a closed popup re-decoding sprites every two seconds, sprites
 decoding into two copies of the first frame. **None of that was visible in a container.**
 
-The remaining gap is the **Windows tray UI**. The daemon reads real logs and writes a real
+The last gap was the **Windows tray UI**. The daemon reads real logs and writes a real
 `state.json` on a windows-latest runner on every push, and the tray app is constructed and
-click-driven on that same runner. But nobody has *seen* the pet and the tray icon on an actual
-Windows screen.
+click-driven on that same runner — but nobody had *seen* the result. It has now been **confirmed
+on Windows 10**: the pet survives a click, the tray icon actually animates, and all four popup
+tabs render.
 
 ## Features
 
