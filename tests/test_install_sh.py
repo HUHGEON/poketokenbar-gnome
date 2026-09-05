@@ -5,6 +5,8 @@ that decide behaviour are plain shell and can be run on their own.
 """
 
 import os
+import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -31,6 +33,10 @@ def test_the_installer_seeds_the_pin_setting_from_the_front_end():
     )
 
 
+@pytest.mark.skipif(
+    shutil.which("bash") is None or sys.platform == "win32",
+    reason="install.sh is the Linux installer; Windows has its own",
+)
 @pytest.mark.parametrize("ui,expected", [
     ("gnome", True), ("plasma", True), ("qt", False), ("none", False),
 ])
