@@ -36,6 +36,7 @@ copy_tree "$here/poketokenbar" "$app/poketokenbar"
 # offered an update it cannot verify is newer.
 revision="$(git -C "$here" rev-parse HEAD 2>/dev/null || true)"
 printf '%s' "$revision" > "$app/REVISION"
+
 echo "    revision ${revision:-unknown}"
 
 echo "==> creating venv at $venv"

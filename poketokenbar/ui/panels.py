@@ -778,13 +778,15 @@ class SettingsPanel(Panel):
          ("quality_saver", "quality_balanced", "quality_smooth")),
         ("limit_percent_mode", "setting_limit_percent",
          ("used", "remaining"), ("usage", "remaining")),
+        ("pin_on_graduation", "setting_pin_on_graduation",
+         ("keep", "release"), ("pin_keep", "pin_release")),
         ("limit_display_mode", "setting_limit_display",
          ("both", "session", "weekly"),
          ("limits_both", "five_hour_session", "weekly")),
     )
     # Which of the CHOICES are drawn as a two-or-three-way switch rather than a
     # dropdown, matching the settings sheet.
-    SEGMENTED = ("limit_percent_mode",)
+    SEGMENTED = ("limit_percent_mode", "pin_on_graduation")
 
     def update(self, state: dict | None) -> None:
         self.clear()
@@ -797,6 +799,7 @@ class SettingsPanel(Panel):
             self._choice_row(values, "refresh_interval"),
             self._choice_row(values, "animation_quality"),
             self._choice_row(values, "limit_percent_mode"),
+            self._choice_row(values, "pin_on_graduation"),
             self._choice_row(values, "limit_display_mode"),
             self._toggle_row(values, "launch_at_login"),
         ]))

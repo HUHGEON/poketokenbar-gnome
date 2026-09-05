@@ -45,6 +45,9 @@ class CompanionStore:
         self.api = api
         self.sprites = sprite_store
         self.rng = rng or random.Random()
+        # Set by the daemon from config each poll, the way the language is.
+        # False keeps a pin where it is when the Pokemon graduates.
+        self.release_pin_on_graduation = False
         # Held for one poll so the popup can show a celebration banner; the
         # notification fires immediately but the banner needs a render pass.
         self.celebration: dict | None = None
@@ -91,7 +94,8 @@ class CompanionStore:
 
         line = self._line_for_egg() if self.state.active is None else None
         self.last_events = companion.apply_usage(
-            self.state, delta, line_for_egg=line, rng=self.rng
+            self.state, delta, line_for_egg=line, rng=self.rng,
+            release_pin_on_graduation=self.release_pin_on_graduation,
         )
         self._note_celebration(self.last_events)
         self._persist()

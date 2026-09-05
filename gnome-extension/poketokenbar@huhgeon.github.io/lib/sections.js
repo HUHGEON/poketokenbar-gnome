@@ -661,6 +661,16 @@ const CHOICES = [
     // Whether a limit reads as how much is used or how much is left. A display
     // transform only: the meter and its colour stay on the utilization, so a
     // window at 95% is still red while it reads "5% left".
+    // 고정한 포켓몬이 졸업했을 때. 어느 쪽도 틀리지 않아서 이름 있는 선택으로 둔다 —
+    // "끔" 은 둘 중 어느 쪽인지 말해주지 않는다.
+    {
+        key: 'pin_on_graduation',
+        string: 'setting_pin_on_graduation',
+        options: [
+            {value: 'keep', string: 'pin_keep'},
+            {value: 'release', string: 'pin_release'},
+        ],
+    },
     {
         key: 'limit_percent_mode',
         string: 'setting_limit_percent',

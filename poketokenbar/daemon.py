@@ -331,6 +331,8 @@ class Daemon:
                 # popup renders half-translated.
                 language = str(self.config_values.get("language", "en"))
                 self.companion_store.state.language = language
+                self.companion_store.release_pin_on_graduation = (
+                    self.config_values.get("pin_on_graduation") == "release")
                 self.companion_store.update(
                     {pid: d.total_tokens for pid, d in daily_by_provider.items()}
                 )

@@ -267,13 +267,19 @@ def test_a_pinned_ditto_lands_on_ditto_not_on_the_form_it_faked():
 # MARK: the pin lets go when the companion does
 
 
-def graduate_now(state):
-    """Feed the final form enough to complete it."""
+def graduate_now(state, release_pin=True):
+    """Feed the final form enough to complete it.
+
+    `release_pin` is the setting, not a default: whether a pin on the
+    graduating form is let go is a choice, and these tests are about the
+    behaviour when it is. The other setting has tests of its own below.
+    """
     from poketokenbar import balance, companion
 
     mon = state.active
     threshold = balance.phase_threshold(mon.rarity, mon.total_forms, mon.stage_index)
-    return companion.apply_usage(state, threshold - mon.used_at_stage)
+    return companion.apply_usage(state, threshold - mon.used_at_stage,
+                                 release_pin_on_graduation=release_pin)
 
 
 def test_a_pin_following_the_companion_is_released_when_it_graduates():
@@ -347,3 +353,76 @@ def test_a_pin_on_an_outgrown_form_of_the_same_companion_survives():
     graduate_now(state)
 
     assert state.representative_species_id == 4
+
+
+# MARK: the two readings of a pin
+#
+# Both are defensible, so it is a setting rather than a rule. `install.sh`
+# picks the default from the front end it installs: the GNOME popup releases,
+# the Qt tray keeps — which is what each set of users asked for. The pin lives
+# in the save and the daemon is what moves it, so one daemon cannot behave one
+# way for one front end and another way for the other.
+
+
+def test_by_default_a_pin_outlives_the_graduation():
+    """"Pin" read literally: the panel shows the species you chose until you
+    choose otherwise, and a graduated species is still in your Pokedex."""
+    state = CompanionState(active=raising(path=(4, 5, 6), stage=2))
+    state.representative_species_id = 6
+
+    graduate_now(state, release_pin=False)
+
+    assert state.representative_species_id == 6
+    assert store(state).panel_species()[0] == 6
+
+
+def test_the_default_matches_the_function_default():
+    """The setting and the function's own default have to agree, or the
+    behaviour changes depending on which one a caller went through."""
+    from poketokenbar import config
+
+    assert config.DEFAULTS["pin_on_graduation"] == "keep"
+
+
+def test_the_choice_is_named_rather_than_a_switch():
+    """"Off" does not say which of the two readings it means, and both are
+    defensible — so each is a word."""
+    from poketokenbar import config, l10n
+
+    assert config.DEFAULTS["pin_on_graduation"] in ("keep", "release")
+    for language in l10n.LANGUAGES:
+        catalogue = l10n.catalogue(language)
+        assert catalogue["pin_keep"].strip()
+        assert catalogue["pin_release"].strip()
+        assert catalogue["pin_keep"] != catalogue["pin_release"]
+
+
+def test_the_setting_reaches_the_growth_from_the_daemon(tmp_path):
+    """It is threaded the way the language is: set on the store each poll from
+    config, so a change through poketokenctl takes effect too."""
+    from poketokenbar import balance, config, state as state_module
+    from poketokenbar.companion_store import CompanionStore
+    from poketokenbar.daemon import Daemon
+
+    config.set_value(config.default_path(), "pin_on_graduation", "release")
+    store_ = CompanionStore(save_path=tmp_path / "companion.json", api=None,
+                            sprite_store=None)
+    store_.state = CompanionState(active=raising(path=(4, 5, 6), stage=2),
+                                  install_baseline_set=True,
+                                  claimed_today_tokens_by_provider={},
+                                  last_date="2026-09-05")
+    store_.state.representative_species_id = 6
+
+    daemon = Daemon(state_path=tmp_path / "state.json",
+                    config_path=config.default_path(), cache=None, providers=[],
+                    companion_store=store_)
+    daemon.config_values = config.load(config.default_path())
+    assert daemon.config_values["pin_on_graduation"] == "release"
+
+    daemon.poll_once()
+    assert store_.release_pin_on_graduation is True
+
+    mon = store_.state.active
+    store_.update({"claude_code": balance.phase_threshold(
+        mon.rarity, mon.total_forms, mon.stage_index) - mon.used_at_stage})
+    assert store_.state.representative_species_id is None

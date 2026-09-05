@@ -352,7 +352,8 @@ def hatch(state: CompanionState, line: EvoLine, rng: random.Random) -> MonState:
     return mon
 
 
-def graduate(state: CompanionState, mon: MonState, now: float | None = None) -> DexEntry:
+def graduate(state: CompanionState, mon: MonState, now: float | None = None,
+             release_pin: bool = False) -> DexEntry:
     """Archive a completed companion and clear the slot for a fresh egg."""
     import time as _time
 
@@ -369,17 +370,17 @@ def graduate(state: CompanionState, mon: MonState, now: float | None = None) -> 
     )
     state.dex.append(entry)
     state.collected_finals.add(f"{mon.base_id}:{mon.current_id}")
-    # A pin that had been following this companion has nothing left to follow,
-    # so it is released rather than left standing on the panel. Without this it
-    # stayed: the species is in the dex now, so reconcile keeps it, and the
-    # panel showed the graduated Pokemon through the whole next egg and past
-    # the hatch after it — the egg never appeared, the new companion never
-    # appeared, and its evolutions looked like they had not happened.
+    # A pin on the form that is graduating has nothing left to follow. Whether
+    # that means "release it" or "leave it" is the reader's choice, because
+    # both readings are defensible: a pin says "show me this species" and the
+    # species is in the Pokedex now — but leaving it also stops the panel ever
+    # showing the next egg, its hatch, or that companion's evolutions, which is
+    # how it was noticed.
     #
     # Only the form that is graduating. A pin on any other form names a species
-    # someone chose over the companion, which is the same rule the evolution
-    # handoff follows.
-    if state.representative_species_id == mon.current_id:
+    # someone chose over the companion, which is the rule the evolution handoff
+    # already follows.
+    if release_pin and state.representative_species_id == mon.current_id:
         state.representative_species_id = None
     state.active = None
     state.egg_usage = 0
@@ -396,6 +397,7 @@ def apply_usage(
     tokens: int,
     line_for_egg=None,
     rng: random.Random | None = None,
+    release_pin_on_graduation: bool = False,
 ) -> GrowthEvents:
     """Feed tokens to the companion.
 
@@ -459,7 +461,8 @@ def apply_usage(
         if mon.is_final_form:
             # No carry-over: graduation clears the slot and the next egg starts
             # its incubation from zero.
-            events.graduated = graduate(state, mon)
+            events.graduated = graduate(
+                state, mon, release_pin=release_pin_on_graduation)
             break
 
         mon.used_at_stage -= threshold  # overflow carries into the new stage
