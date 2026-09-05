@@ -36,6 +36,24 @@ copy_tree "$here/poketokenbar" "$app/poketokenbar"
 # offered an update it cannot verify is newer.
 revision="$(git -C "$here" rev-parse HEAD 2>/dev/null || true)"
 printf '%s' "$revision" > "$app/REVISION"
+
+# What a pin means when the Pokemon it names graduates. Both readings are
+# defensible and the pin lives in the save, so one daemon cannot behave one way
+# for one front end and another for the other — it is a setting, and this picks
+# its default from the front end being installed. The GNOME popup releases the
+# pin so the panel follows the next egg; the tray keeps it, which is "pin" read
+# literally. Only written on a first install: a later run must not undo a
+# choice someone has since made.
+config_file="${XDG_CONFIG_HOME:-$HOME/.config}/poketokenbar/config.json"
+if [ ! -f "$config_file" ]; then
+  case "$ui" in
+    gnome|plasma) release_pin=true ;;
+    *)            release_pin=false ;;
+  esac
+  mkdir -p "$(dirname "$config_file")"
+  printf '{\n  "release_pin_on_graduation": %s\n}\n' "$release_pin" > "$config_file"
+  echo "    pin released on graduation: $release_pin (from POKETOKENBAR_UI=$ui)"
+fi
 echo "    revision ${revision:-unknown}"
 
 echo "==> creating venv at $venv"

@@ -484,6 +484,21 @@ STRINGS: dict[str, tuple[str, ...]] = {
     ),
     "plan": ("Plan", "플랜", "プラン", "Plan", "Forfait", "Plano", "Tarif"),
     "account": ("Account", "계정", "アカウント", "Cuenta", "Compte", "Conta", "Konto"),
+    "setting_release_pin": (
+        "Release a pin when it graduates", "졸업하면 고정 해제",
+        "卒業したら固定を解除", "Soltar el fijado al graduarse",
+        "Libérer l'épingle à la remise de diplôme",
+        "Soltar a fixação ao se formar", "Anheftung beim Abschluss lösen",
+    ),
+    "release_pin_hint": (
+        "Off, the panel keeps showing the species you pinned",
+        "끄면 고정한 종을 계속 보여줍니다",
+        "オフにすると固定した種を表示し続けます",
+        "Desactivado, el panel sigue mostrando la especie fijada",
+        "Désactivé, le panneau continue d'afficher l'espèce épinglée",
+        "Desligado, o painel continua mostrando a espécie fixada",
+        "Aus: Die Leiste zeigt weiter die angeheftete Art",
+    ),
     "setting_launch_at_login": (
         "Launch at login", "로그인 시 자동 시작", "ログイン時に自動起動",
         "Iniciar al arrancar sesión", "Lancer à l'ouverture de session",

@@ -753,9 +753,11 @@ class SettingsPanel(Panel):
         ("floating_pet_enabled", "setting_desktop_pet"),
         ("floating_pet_bubble_alerts", "setting_pet_bubbles"),
         ("launch_at_login", "setting_launch_at_login"),
+        ("release_pin_on_graduation", "setting_release_pin"),
     )
     SUBTITLES = {
         "status_checks_enabled": "status_checks_hint",
+        "release_pin_on_graduation": "release_pin_hint",
         "floating_pet_enabled": "floating_pet_hint",
         "animation_quality": "animation_hint",
     }
@@ -799,6 +801,7 @@ class SettingsPanel(Panel):
             self._choice_row(values, "limit_percent_mode"),
             self._choice_row(values, "limit_display_mode"),
             self._toggle_row(values, "launch_at_login"),
+            self._toggle_row(values, "release_pin_on_graduation"),
         ]))
 
         self.add(heading(self.t("show_in_panel")))

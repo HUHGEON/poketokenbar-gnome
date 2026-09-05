@@ -631,6 +631,7 @@ const TOGGLES = [
     {key: 'floating_pet_enabled', string: 'setting_desktop_pet'},
     {key: 'floating_pet_bubble_alerts', string: 'setting_pet_bubbles'},
     {key: 'launch_at_login', string: 'setting_launch_at_login'},
+    {key: 'release_pin_on_graduation', string: 'setting_release_pin'},
 ];
 
 // Numeric settings, as a stepper rather than a text field: every one of these
