@@ -336,8 +336,9 @@ STRINGS: dict[str, tuple[str, ...]] = {
     "quality_smooth": ("Smooth", "부드럽게", "滑らか", "Fluido",
         "Fluide", "Fluido", "Flüssig",
     ),
-    "setting_limit_display": ("Limit display", "한도 표시 방식", "上限の表示", "Visualización del límite",
-        "Affichage de la limite", "Exibição do limite", "Limit-Anzeige",
+    "setting_limit_display": (
+        "Limits shown", "표시할 한도 창", "表示する上限", "Límites mostrados",
+        "Limites affichées", "Limites exibidos", "Angezeigte Limits",
     ),
     "limits_both": ("Both", "둘 다", "両方", "Ambos",
         "Les deux", "Ambos", "Beide",
@@ -484,20 +485,17 @@ STRINGS: dict[str, tuple[str, ...]] = {
     ),
     "plan": ("Plan", "플랜", "プラン", "Plan", "Forfait", "Plano", "Tarif"),
     "account": ("Account", "계정", "アカウント", "Cuenta", "Compte", "Conta", "Konto"),
-    "setting_release_pin": (
-        "Release a pin when it graduates", "졸업하면 고정 해제",
-        "卒業したら固定を解除", "Soltar el fijado al graduarse",
-        "Libérer l'épingle à la remise de diplôme",
-        "Soltar a fixação ao se formar", "Anheftung beim Abschluss lösen",
+    "setting_pin_on_graduation": (
+        "When a pinned Pokemon graduates", "고정한 포켓몬이 졸업하면",
+        "固定したポケモンが卒業したら", "Cuando se gradúa un Pokemon fijado",
+        "Quand un Pokemon épinglé est diplômé",
+        "Quando um Pokemon fixado se forma",
+        "Wenn ein angeheftetes Pokemon seinen Abschluss macht",
     ),
-    "release_pin_hint": (
-        "Off, the panel keeps showing the species you pinned",
-        "끄면 고정한 종을 계속 보여줍니다",
-        "オフにすると固定した種を表示し続けます",
-        "Desactivado, el panel sigue mostrando la especie fijada",
-        "Désactivé, le panneau continue d'afficher l'espèce épinglée",
-        "Desligado, o painel continua mostrando a espécie fixada",
-        "Aus: Die Leiste zeigt weiter die angeheftete Art",
+    "pin_keep": ("Keep", "고정", "固定のまま", "Mantener", "Garder", "Manter", "Behalten"),
+    "pin_release": (
+        "Move on", "변경", "次へ移る", "Cambiar", "Passer au suivant", "Mudar",
+        "Weiterziehen",
     ),
     "setting_launch_at_login": (
         "Launch at login", "로그인 시 자동 시작", "ログイン時に自動起動",

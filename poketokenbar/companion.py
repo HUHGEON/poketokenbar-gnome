@@ -371,11 +371,11 @@ def graduate(state: CompanionState, mon: MonState, now: float | None = None,
     state.dex.append(entry)
     state.collected_finals.add(f"{mon.base_id}:{mon.current_id}")
     # A pin on the form that is graduating has nothing left to follow. Whether
-    # that means "release it" or "leave it" is a setting, because both readings
-    # are defensible: a pin says "show me this species", and the species is in
-    # the Pokedex now — but it also stops the panel ever showing the next egg,
-    # its hatch, or that companion's evolutions, which is what it looked like
-    # when it was reported.
+    # that means "release it" or "leave it" is the reader's choice, because
+    # both readings are defensible: a pin says "show me this species" and the
+    # species is in the Pokedex now — but leaving it also stops the panel ever
+    # showing the next egg, its hatch, or that companion's evolutions, which is
+    # how it was noticed.
     #
     # Only the form that is graduating. A pin on any other form names a species
     # someone chose over the companion, which is the rule the evolution handoff

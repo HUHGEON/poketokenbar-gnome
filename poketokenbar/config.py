@@ -26,19 +26,18 @@ DEFAULTS: dict[str, object] = {
     # the utilization, so "10% left" still shows red.
     "limit_percent_mode": "used",
     "launch_at_login": False,
-    # What a pin means when the Pokemon it names graduates.
+    # What happens to a pin once the Pokemon it names has graduated.
     #
-    # False — it stays. "Pin" read literally: the panel shows the species you
-    # chose until you choose otherwise, and a graduated species is still in
-    # your Pokedex.
-    # True — it is released and the panel follows the companion again, so the
-    # next egg, its hatch and its evolutions all appear.
+    # "keep"    — the panel goes on showing the species you pinned. "Pin" read
+    #             literally, and a graduated species is still in your Pokedex.
+    #             The default, because it is what pressing the star says.
+    # "release" — the pin is let go and the panel follows the companion again:
+    #             the next egg, its hatch and its evolutions all appear.
     #
-    # Neither is wrong, which is why it is a setting rather than a rule: the
-    # pin lives in the save and the daemon is what moves it, so one daemon
-    # cannot behave one way for one front end and another way for the other.
-    # install.sh picks the default from the front end it is installing.
-    "release_pin_on_graduation": False,
+    # Neither is wrong, so it is a choice rather than a rule — and a named
+    # choice rather than a switch, because "off" does not say which of the two
+    # it means.
+    "pin_on_graduation": "keep",
     "limit_notifications": True,
     "companion_notifications": True,
     "status_checks_enabled": True,

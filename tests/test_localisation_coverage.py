@@ -180,3 +180,20 @@ def test_both_front_ends_resolve_natures():
     assert "nature_" in sections, "the extension prints the id"
     panels = (QT_UI / "panels.py").read_text(encoding="utf-8")
     assert "nature_" in panels, "the Qt panels print the id"
+
+
+@pytest.mark.parametrize("language", l10n.LANGUAGES)
+def test_no_two_settings_share_a_label(language):
+    """A screen with the same words twice gives no way to tell which control
+    you are about to change. `setting_limit_display` and
+    `setting_limit_percent` were both "한도 표시 방식" — one is upstream's
+    used-versus-remaining, the other is this port's which-windows-to-show."""
+    from poketokenbar.ui import panels
+
+    catalogue = l10n.catalogue(language)
+    keys = [label for _key, label in panels.SettingsPanel.TOGGLES]
+    keys += [label for _key, label, *_ in panels.SettingsPanel.SPINS]
+    keys += [label for _key, label, *_ in panels.SettingsPanel.CHOICES]
+    labels = [catalogue[key] for key in keys]
+    duplicated = {text for text in labels if labels.count(text) > 1}
+    assert not duplicated, f"{language}: two settings share {sorted(duplicated)}"

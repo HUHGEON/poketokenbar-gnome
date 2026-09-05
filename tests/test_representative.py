@@ -376,12 +376,25 @@ def test_by_default_a_pin_outlives_the_graduation():
     assert store(state).panel_species()[0] == 6
 
 
-def test_the_default_matches_the_config_default():
+def test_the_default_matches_the_function_default():
     """The setting and the function's own default have to agree, or the
     behaviour changes depending on which one a caller went through."""
     from poketokenbar import config
 
-    assert config.DEFAULTS["release_pin_on_graduation"] is False
+    assert config.DEFAULTS["pin_on_graduation"] == "keep"
+
+
+def test_the_choice_is_named_rather_than_a_switch():
+    """"Off" does not say which of the two readings it means, and both are
+    defensible — so each is a word."""
+    from poketokenbar import config, l10n
+
+    assert config.DEFAULTS["pin_on_graduation"] in ("keep", "release")
+    for language in l10n.LANGUAGES:
+        catalogue = l10n.catalogue(language)
+        assert catalogue["pin_keep"].strip()
+        assert catalogue["pin_release"].strip()
+        assert catalogue["pin_keep"] != catalogue["pin_release"]
 
 
 def test_the_setting_reaches_the_growth_from_the_daemon(tmp_path):
@@ -391,7 +404,7 @@ def test_the_setting_reaches_the_growth_from_the_daemon(tmp_path):
     from poketokenbar.companion_store import CompanionStore
     from poketokenbar.daemon import Daemon
 
-    config.set_value(config.default_path(), "release_pin_on_graduation", "True")
+    config.set_value(config.default_path(), "pin_on_graduation", "release")
     store_ = CompanionStore(save_path=tmp_path / "companion.json", api=None,
                             sprite_store=None)
     store_.state = CompanionState(active=raising(path=(4, 5, 6), stage=2),
@@ -404,7 +417,7 @@ def test_the_setting_reaches_the_growth_from_the_daemon(tmp_path):
                     config_path=config.default_path(), cache=None, providers=[],
                     companion_store=store_)
     daemon.config_values = config.load(config.default_path())
-    assert daemon.config_values["release_pin_on_graduation"] is True
+    assert daemon.config_values["pin_on_graduation"] == "release"
 
     daemon.poll_once()
     assert store_.release_pin_on_graduation is True
