@@ -54,7 +54,7 @@ DEX_CELL_WIDTH = 78
 
 RARITIES = ("legendary", "rare", "uncommon", "common")
 
-REPO_URL = "https://github.com/HUHGEON/poketokenbar-gnome"
+REPO_URL = "https://github.com/HUHGEON/poketokenbar-linux-windows"
 # The macOS app this is a port of. Credited in the UI, not only in the README:
 # the Pokedex, the balance and every string here came from it.
 UPSTREAM_URL = "https://github.com/chattymin/PokeTokenBar"

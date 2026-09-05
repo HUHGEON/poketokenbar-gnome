@@ -25,7 +25,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-REPO = "HUHGEON/poketokenbar-gnome"
+REPO = "HUHGEON/poketokenbar-linux-windows"
 BRANCH = "gnome"
 API = f"https://api.github.com/repos/{REPO}"
 USER_AGENT = "poketokenbar-updater"
