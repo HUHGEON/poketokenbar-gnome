@@ -65,8 +65,9 @@ STRINGS: dict[str, tuple[str, ...]] = {
     "egg": ("Egg", "알", "タマゴ", "Huevo",
         'Œuf', 'Ovo', 'Ei',
     ),
-    "final_form": ("Final form", "최종 형태", "最終形態", "Forma final",
-        'Forme finale', 'Forma final', 'Endform',
+    "final_form": (
+        "Final form", "최종 진화체", "最終進化", "Forma final", "Forme finale",
+        "Forma final", "Letzte Entwicklungsstufe",
     ),
     "graduation": ("graduation", "졸업", "卒業", "graduación",
         'diplôme', 'formatura', 'Abschluss',
